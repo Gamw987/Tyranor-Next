@@ -799,6 +799,7 @@ internal fun GameActionsSheet(
     val coverDownloadFailedMessage = stringResource(R.string.game_cover_download_failed)
     // 抽屉动作条目的文案/颜色：buildList 的 lambda 内不允许 @Composable 调用，先在组合体取值
     val drawerSearchCoverTitle = stringResource(R.string.game_search_cover)
+    val drawerGameModsTitle = stringResource(R.string.game_mods_title)
     val drawerSaveManagementTitle = stringResource(R.string.game_save_management)
     val drawerOnlinePatchTitle = stringResource(R.string.game_online_patch)
     val drawerEngineSettingsTitle = stringResource(R.string.settings_engine_settings)
@@ -972,6 +973,22 @@ internal fun GameActionsSheet(
                             onClick = { if (!isBatchScrapingActive()) showCoverSourcePicker = true },
                         ),
                     )
+                    if (game.engine == EngineType.RENPY) {
+                        add(
+                            DrawerAction(
+                                key = "game_mods",
+                                title = drawerGameModsTitle,
+                                icon = R.drawable.ic_module,
+                                showArrow = true,
+                                iconTint = drawerPrimaryColor,
+                                onClick = {
+                                    navigation.openDetails {
+                                        startActivityWithPageTransition(context, GameModsActivity.createIntent(context, game))
+                                    }
+                                },
+                            ),
+                        )
+                    }
                     if (shouldShowSaveManagement(game)) {
                         add(
                             DrawerAction(
