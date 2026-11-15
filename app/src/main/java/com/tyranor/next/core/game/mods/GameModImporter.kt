@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import java.io.InputStream
+import java.nio.file.Files
 import java.util.UUID
 import java.util.zip.ZipException
 import java.util.zip.ZipInputStream
@@ -126,6 +127,103 @@ class GameModImporter(context: Context) {
         return Summary(imported, skipped, failed)
     }
 
+    /** 导入本地文件系统中的多个 ZIP。供内嵌文件选择器使用。 */
+    fun importArchiveFiles(files: List<File>): Summary {
+        val imported = ArrayList<String>()
+        val skipped = ArrayList<String>()
+        val failed = ArrayList<Failure>()
+        val unique = files
+            .mapNotNull { file -> runCatching { file.canonicalFile }.getOrNull() }
+            .distinctBy { it.path }
+            .take(MAX_SOURCES)
+        for (file in unique) {
+            val source = file.name.ifBlank { "archive.zip" }
+            try {
+                importArchiveFile(file, imported, skipped, failed, source)
+            } catch (cancelled: java.util.concurrent.CancellationException) {
+                throw cancelled
+            } catch (error: GameModException) {
+                failed += Failure(source, error.error)
+            } catch (_: Throwable) {
+                failed += Failure(source, GameModError.INVALID_ARCHIVE)
+            }
+        }
+        if (files.size > MAX_SOURCES) failed += Failure("ZIP", GameModError.TOO_MANY)
+        return Summary(imported, skipped, failed)
+    }
+
+    /**
+     * 递归扫描本地文件夹中的 `.zip` 和包含 `plugin.json` 的模组目录。
+     * 文件夹本身也可以是单个模组目录。供内嵌文件选择器使用。
+     */
+    fun importLocalFolder(folder: File): Summary {
+        val root = runCatching { folder.canonicalFile }.getOrNull()
+        if (root == null || !root.isDirectory) {
+            return Summary(failed = listOf(Failure(folder.name.ifBlank { "folder" }, GameModError.INVALID_ARCHIVE)))
+        }
+        val archives = ArrayList<File>()
+        val directories = ArrayList<File>()
+        var tooMany = false
+
+        fun scan(dir: File, depth: Int) {
+            if (tooMany || depth > MAX_DEPTH) return
+            if (File(dir, "plugin.json").isFile) {
+                directories += dir
+                if (archives.size + directories.size > MAX_CANDIDATES) tooMany = true
+                return
+            }
+            dir.listFiles().orEmpty()
+                .sortedBy { it.name.lowercase(java.util.Locale.ROOT) }
+                .forEach { child ->
+                    if (Files.isSymbolicLink(child.toPath())) return@forEach
+                    when {
+                        child.isDirectory -> scan(child, depth + 1)
+                        child.isFile && child.name.endsWith(".zip", ignoreCase = true) -> {
+                            archives += child
+                            if (archives.size + directories.size > MAX_CANDIDATES) tooMany = true
+                        }
+                    }
+                }
+        }
+
+        scan(root, 0)
+        if (tooMany) {
+            return Summary(failed = listOf(Failure(root.name.ifBlank { "folder" }, GameModError.TOO_MANY)))
+        }
+        if (archives.isEmpty() && directories.isEmpty()) {
+            return Summary(failed = listOf(Failure(root.name.ifBlank { "folder" }, GameModError.INVALID_ARCHIVE)))
+        }
+
+        val imported = ArrayList<String>()
+        val skipped = ArrayList<String>()
+        val failed = ArrayList<Failure>()
+        for (archive in archives) {
+            val source = archive.name.ifBlank { "archive.zip" }
+            try {
+                importArchiveFile(archive, imported, skipped, failed, source)
+            } catch (cancelled: java.util.concurrent.CancellationException) {
+                throw cancelled
+            } catch (error: GameModException) {
+                failed += Failure(source, error.error)
+            } catch (_: Throwable) {
+                failed += Failure(source, GameModError.INVALID_ARCHIVE)
+            }
+        }
+        for (directory in directories) {
+            val source = directory.name.ifBlank { "plugin" }
+            try {
+                importLocalPluginDirectory(directory, imported, skipped, failed, source)
+            } catch (cancelled: java.util.concurrent.CancellationException) {
+                throw cancelled
+            } catch (error: GameModException) {
+                failed += Failure(source, error.error)
+            } catch (_: Throwable) {
+                failed += Failure(source, GameModError.INVALID_MANIFEST)
+            }
+        }
+        return Summary(imported, skipped, failed)
+    }
+
     private fun importArchive(
         uri: Uri,
         imported: MutableList<String>,
@@ -133,10 +231,31 @@ class GameModImporter(context: Context) {
         failed: MutableList<Failure>,
         source: String,
     ) {
+        val input = resolver.openInputStream(uri)
+            ?: throw GameModException(GameModError.INVALID_ARCHIVE)
+        importArchiveStream(input, imported, skipped, failed, source)
+    }
+
+    private fun importArchiveFile(
+        file: File,
+        imported: MutableList<String>,
+        skipped: MutableList<String>,
+        failed: MutableList<Failure>,
+        source: String,
+    ) {
+        if (!file.isFile) throw GameModException(GameModError.INVALID_ARCHIVE)
+        importArchiveStream(file.inputStream().buffered(), imported, skipped, failed, source)
+    }
+
+    private fun importArchiveStream(
+        input: InputStream,
+        imported: MutableList<String>,
+        skipped: MutableList<String>,
+        failed: MutableList<Failure>,
+        source: String,
+    ) {
         val staging = createStaging()
         try {
-            val input = resolver.openInputStream(uri)
-                ?: throw GameModException(GameModError.INVALID_ARCHIVE)
             input.use { extractZip(it, staging) }
             val roots = findPluginRoots(staging)
             if (roots.isEmpty()) throw GameModException(GameModError.INVALID_ARCHIVE)
@@ -165,6 +284,54 @@ class GameModImporter(context: Context) {
             importLocalPlugin(File(staging, name), imported, skipped, failed, source)
         } finally {
             deleteTree(staging)
+        }
+    }
+
+    private fun importLocalPluginDirectory(
+        directory: File,
+        imported: MutableList<String>,
+        skipped: MutableList<String>,
+        failed: MutableList<Failure>,
+        source: String,
+    ) {
+        val staging = createStaging()
+        try {
+            val budget = CopyBudget()
+            copyLocalDirectory(directory, staging, budget, 0)
+            importLocalPlugin(File(staging, safeFileName(directory.name)), imported, skipped, failed, source)
+        } finally {
+            deleteTree(staging)
+        }
+    }
+
+    private fun copyLocalDirectory(source: File, destination: File, budget: CopyBudget, depth: Int) {
+        if (depth > MAX_DEPTH) throw GameModException(GameModError.TOO_MANY)
+        if (Files.isSymbolicLink(source.toPath())) throw GameModException(GameModError.INVALID_ARCHIVE)
+        val target = File(destination, safeFileName(source.name))
+        if (!target.mkdirs() && !target.isDirectory) throw GameModException(GameModError.IO)
+        source.listFiles().orEmpty().forEach { child ->
+            val childName = safeFileName(child.name)
+            if (Files.isSymbolicLink(child.toPath())) throw GameModException(GameModError.INVALID_ARCHIVE)
+            if (child.isDirectory) {
+                copyLocalDirectory(child, target, budget, depth + 1)
+            } else {
+                budget.files++
+                if (budget.files > MAX_COPIED_FILES) throw GameModException(GameModError.TOO_MANY)
+                child.inputStream().buffered().use { sourceStream ->
+                    File(target, childName).outputStream().buffered().use { sink ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val read = sourceStream.read(buffer)
+                            if (read <= 0) break
+                            budget.bytes += read
+                            if (budget.bytes > MAX_UNCOMPRESSED_BYTES) {
+                                throw GameModException(GameModError.TOO_MANY)
+                            }
+                            sink.write(buffer, 0, read)
+                        }
+                    }
+                }
+            }
         }
     }
 

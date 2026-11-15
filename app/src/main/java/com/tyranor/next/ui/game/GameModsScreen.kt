@@ -1,9 +1,6 @@
 package com.tyranor.next.ui.game
 
-import android.content.Intent
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,6 +80,7 @@ internal fun GameModsScreen(game: ScanGame) {
     var showImportSheet by remember(game.uri) { mutableStateOf(false) }
     var importing by remember(game.uri) { mutableStateOf(false) }
     var importSummary by remember(game.uri) { mutableStateOf<GameModImporter.Summary?>(null) }
+    var pickerMode by remember(game.uri) { mutableStateOf<GameModPickMode?>(null) }
     val importer = remember { GameModImporter(context.applicationContext) }
 
     val versionFormat = stringResource(R.string.game_mods_version)
@@ -203,23 +201,19 @@ internal fun GameModsScreen(game: ScanGame) {
         }
     }
 
-    val zipPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) {
-            showImportSheet = false
-            runImport { importer.importArchives(uris) }
-        }
-    }
-    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-            }
-            showImportSheet = false
-            runImport { importer.importTree(uri) }
-        }
+    pickerMode?.let { mode ->
+        GameModFilePickerDialog(
+            mode = mode,
+            onDismiss = { pickerMode = null },
+            onArchives = { files ->
+                pickerMode = null
+                runImport { importer.importArchiveFiles(files) }
+            },
+            onFolder = { folder ->
+                pickerMode = null
+                runImport { importer.importLocalFolder(folder) }
+            },
+        )
     }
 
     LaunchedEffect(game.uri) {
@@ -375,7 +369,7 @@ internal fun GameModsScreen(game: ScanGame) {
                     leadingIcon = R.drawable.ic_sheet_archive,
                     onClick = {
                         showImportSheet = false
-                        zipPicker.launch(arrayOf("*/*"))
+                        pickerMode = GameModPickMode.ARCHIVES
                     },
                 )
                 AppNavItem(
@@ -384,7 +378,7 @@ internal fun GameModsScreen(game: ScanGame) {
                     leadingIcon = R.drawable.ic_sheet_folder,
                     onClick = {
                         showImportSheet = false
-                        folderPicker.launch(null)
+                        pickerMode = GameModPickMode.FOLDER
                     },
                 )
             }
