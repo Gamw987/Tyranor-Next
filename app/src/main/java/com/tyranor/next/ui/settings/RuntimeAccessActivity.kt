@@ -96,6 +96,9 @@ internal fun RuntimeAccessScreen() {
 
     val shizukuUnavailable = stringResource(R.string.settings_privilege_shizuku_unavailable)
     val rootUnavailable = stringResource(R.string.settings_privilege_root_unavailable)
+    val shizukuDenied = stringResource(R.string.settings_privilege_shizuku_denied)
+    val customCleared = stringResource(R.string.settings_privilege_custom_cleared)
+    val customSaved = stringResource(R.string.settings_privilege_custom_saved)
 
     DisposableEffect(Unit) {
         val binderListener = Shizuku.OnBinderReceivedListener { refresh() }
@@ -107,7 +110,7 @@ internal fun RuntimeAccessScreen() {
                 selected = RuntimeAccess.Authorizer.SHIZUKU
                 RuntimeAccess.setAuthorizer(context, selected)
                 if (result != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    message = context.getString(R.string.settings_privilege_shizuku_denied)
+                    message = shizukuDenied
                 }
                 refresh()
             }
@@ -332,13 +335,7 @@ internal fun RuntimeAccessScreen() {
                             RuntimeAccess.setCustomCommand(context, customDraft)
                             status = status.copy(customCommand = customDraft.trim())
                             editingCustom = false
-                            message = context.getString(
-                                if (customDraft.isBlank()) {
-                                    R.string.settings_privilege_custom_cleared
-                                } else {
-                                    R.string.settings_privilege_custom_saved
-                                },
-                            )
+                            message = if (customDraft.isBlank()) customCleared else customSaved
                         },
                         leadingIcon = painterResource(R.drawable.ic_artemis_patch),
                         iconContentDescription = stringResource(R.string.settings_privilege_custom),
@@ -360,13 +357,7 @@ internal fun RuntimeAccessScreen() {
                         RuntimeAccess.setCustomCommand(context, customDraft)
                         status = status.copy(customCommand = customDraft.trim())
                         editingCustom = false
-                        message = context.getString(
-                            if (customDraft.isBlank()) {
-                                R.string.settings_privilege_custom_cleared
-                            } else {
-                                R.string.settings_privilege_custom_saved
-                            },
-                        )
+                        message = if (customDraft.isBlank()) customCleared else customSaved
                     },
                 )
             },

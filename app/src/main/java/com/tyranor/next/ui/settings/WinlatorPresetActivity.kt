@@ -120,22 +120,18 @@ internal fun WinlatorPresetScreen() {
     var current by remember { mutableStateOf(EngineSettingsStore.loadWinlator(context)) }
     var selected by remember { mutableStateOf(WinlatorPresets.match(current)) }
     var message by remember { mutableStateOf<String?>(null) }
+    val clearedMessage = stringResource(R.string.winlator_preset_cleared)
+    val appliedFormat = stringResource(R.string.winlator_preset_applied)
+    val presetTitles = PRESET_ROWS.associate { row -> row.preset to stringResource(row.title) }
 
     fun apply(preset: WinlatorPresets.Preset) {
         current = WinlatorPresets.apply(context, preset)
         selected = WinlatorPresets.match(current)
-        message = context.getString(
-            if (preset == WinlatorPresets.Preset.NONE) {
-                R.string.winlator_preset_cleared
-            } else {
-                R.string.winlator_preset_applied
-            },
-            if (preset == WinlatorPresets.Preset.NONE) {
-                ""
-            } else {
-                context.getString(presetTitleRes(preset))
-            },
-        ).trim()
+        message = if (preset == WinlatorPresets.Preset.NONE) {
+            clearedMessage
+        } else {
+            String.format(java.util.Locale.getDefault(), appliedFormat, presetTitles.getValue(preset)).trim()
+        }
     }
 
     val activePreset = selected
