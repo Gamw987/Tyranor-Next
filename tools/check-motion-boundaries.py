@@ -19,6 +19,7 @@ ui/archive/ArchiveMotion.kt
 ui/engine/EngineStorageMotion.kt
 ui/game/CoverFlowMotion.kt
 ui/game/CropGuides.kt
+ui/game/GameModFilePicker.kt
 ui/game/GameOverlayMotion.kt
 ui/main/MainTabMotion.kt
 ui/onboarding/CoachSpotlight.kt
