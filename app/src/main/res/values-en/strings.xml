@@ -349,6 +349,12 @@
     <string name="game_mods_picker_hint_folder">Open the folder containing the mods, then import it</string>
     <string name="game_mods_picker_import_folder">Import this folder</string>
     <string name="game_mods_picker_parent">Up one level</string>
+    <string name="game_mods_picker_edit_path">Edit</string>
+    <string name="game_mods_picker_path_title">Enter path</string>
+    <string name="game_mods_picker_path_hint">Absolute path</string>
+    <string name="game_mods_picker_path_invalid">Invalid path or outside shared storage</string>
+    <string name="game_mods_picker_go">Go</string>
+    <string name="game_mods_picker_grant_access">Grant access</string>
     <string name="game_online_patch">Online patch</string>
     <string name="game_delete_title">Delete game</string>
     <string name="game_delete_message">This removes the in-app record, settings, and cache for “%1$s”. It will not delete game files.</string>

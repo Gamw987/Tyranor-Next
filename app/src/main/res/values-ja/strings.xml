@@ -349,6 +349,12 @@
     <string name="game_mods_picker_hint_folder">MOD を含むフォルダを開き、「このフォルダをインポート」を押します</string>
     <string name="game_mods_picker_import_folder">このフォルダをインポート</string>
     <string name="game_mods_picker_parent">上の階層へ</string>
+    <string name="game_mods_picker_edit_path">編集</string>
+    <string name="game_mods_picker_path_title">パスを入力</string>
+    <string name="game_mods_picker_path_hint">絶対パス</string>
+    <string name="game_mods_picker_path_invalid">パスが無効、または共有ストレージ外です</string>
+    <string name="game_mods_picker_go">移動</string>
+    <string name="game_mods_picker_grant_access">権限を取得</string>
     <string name="game_online_patch">オンラインパッチ</string>
     <string name="game_delete_title">ゲームを削除</string>
     <string name="game_delete_message">「%1$s」のアプリ内記録、設定、キャッシュを削除します。ゲームファイルは削除されません。</string>

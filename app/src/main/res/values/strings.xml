@@ -349,6 +349,12 @@
     <string name="game_mods_picker_hint_folder">进入包含模组的文件夹，然后导入此文件夹</string>
     <string name="game_mods_picker_import_folder">导入此文件夹</string>
     <string name="game_mods_picker_parent">上一级</string>
+    <string name="game_mods_picker_edit_path">编辑</string>
+    <string name="game_mods_picker_path_title">输入路径</string>
+    <string name="game_mods_picker_path_hint">绝对路径</string>
+    <string name="game_mods_picker_path_invalid">路径无效或不在共享存储内</string>
+    <string name="game_mods_picker_go">前往</string>
+    <string name="game_mods_picker_grant_access">获取权限</string>
     <string name="game_online_patch">在线补丁</string>
     <string name="game_delete_title">删除游戏</string>
     <string name="game_delete_message">将移除「%1$s」的应用内记录、设置与缓存，不会删除游戏文件。</string>
