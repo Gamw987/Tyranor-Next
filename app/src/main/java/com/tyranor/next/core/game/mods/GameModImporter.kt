@@ -248,7 +248,7 @@ class GameModImporter(context: Context) {
             } else {
                 budget.files++
                 if (budget.files > MAX_COPIED_FILES) throw GameModException(GameModError.TOO_MANY)
-                val input = child.openInputStream() ?: throw GameModException(GameModError.INVALID_ARCHIVE)
+                val input = resolver.openInputStream(child.uri) ?: throw GameModException(GameModError.INVALID_ARCHIVE)
                 input.use { sourceStream ->
                     File(target, childName).outputStream().buffered().use { sink ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
