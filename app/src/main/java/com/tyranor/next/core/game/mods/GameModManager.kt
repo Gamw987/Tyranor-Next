@@ -28,6 +28,9 @@ enum class GameModError {
     UNSUPPORTED_ENGINE,
     ALREADY_INSTALLED,
     NOT_INSTALLED,
+    PLUGIN_EXISTS,
+    INVALID_ARCHIVE,
+    TOO_MANY,
     IO,
 }
 
@@ -51,13 +54,13 @@ object GameModManager {
     private const val ENGINE = "renpy"
     private val SAFE_ID = Regex("^[a-z0-9_-]+$")
 
-    private data class ModFile(
+    internal data class ModFile(
         val src: String,
         val dst: String,
         val optional: Boolean,
     )
 
-    private data class ModManifest(
+    internal data class ModManifest(
         val id: String,
         val name: String,
         val version: String,
@@ -70,7 +73,7 @@ object GameModManager {
 
     private fun modsRoot(): File = File(Environment.getExternalStorageDirectory(), ROOT_DIR)
 
-    private fun pluginsRoot(): File = File(modsRoot(), "plugins")
+    internal fun pluginsRoot(): File = File(modsRoot(), "plugins")
 
     private fun stateRoot(): File = File(modsRoot(), "state")
 
@@ -252,14 +255,14 @@ object GameModManager {
         return game.canonicalFile
     }
 
-    private fun readManifest(pluginDir: File): ModManifest {
+    internal fun readManifest(pluginDir: File, requireDirectoryName: Boolean = true): ModManifest {
         if (!pluginDir.isDirectory) throw GameModException(GameModError.PLUGIN_NOT_FOUND)
         val path = File(pluginDir, "plugin.json")
         if (!path.isFile) throw GameModException(GameModError.PLUGIN_NOT_FOUND)
         val json = runCatching { JSONObject(path.readText()) }
             .getOrElse { throw GameModException(GameModError.INVALID_MANIFEST, it) }
         val id = json.optString("id")
-        if (!SAFE_ID.matches(id) || id != pluginDir.name) {
+        if (!SAFE_ID.matches(id) || (requireDirectoryName && id != pluginDir.name)) {
             throw GameModException(GameModError.INVALID_MANIFEST)
         }
         val filesJson = json.optJSONArray("files") ?: JSONArray()
@@ -282,6 +285,32 @@ object GameModManager {
             creates = json.optJSONArray("creates").toStringList(),
             cleanup = json.optJSONArray("cleanup").toStringList(),
         )
+    }
+
+    internal fun validateImportedPlugin(pluginDir: File): ModManifest {
+        val manifest = readManifest(pluginDir, requireDirectoryName = false)
+        if (manifest.engine != ENGINE) throw GameModException(GameModError.UNSUPPORTED_ENGINE)
+        if (manifest.files.isEmpty()) throw GameModException(GameModError.INVALID_MANIFEST)
+        for (file in manifest.files) {
+            val src = resolveInside(pluginDir, file.src)
+            if (!src.isFile && !file.optional) {
+                throw GameModException(GameModError.INVALID_MANIFEST)
+            }
+            resolveInside(pluginDir, file.dst)
+        }
+        for (rel in manifest.creates + manifest.cleanup) {
+            resolveInside(pluginDir, rel)
+        }
+        return manifest
+    }
+
+    internal fun commitImportedPlugin(stagedDir: File): String {
+        val manifest = validateImportedPlugin(stagedDir)
+        val destination = File(pluginsRoot(), manifest.id)
+        if (destination.exists()) throw GameModException(GameModError.PLUGIN_EXISTS)
+        pluginsRoot().mkdirs()
+        if (!stagedDir.renameTo(destination)) throw GameModException(GameModError.IO)
+        return manifest.id
     }
 
     private fun JSONArray?.toStringList(): List<String> {

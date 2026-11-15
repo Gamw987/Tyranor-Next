@@ -1,6 +1,9 @@
 package com.tyranor.next.ui.game
 
+import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +41,7 @@ import com.tyranor.next.R
 import com.tyranor.next.core.game.model.ScanGame
 import com.tyranor.next.core.game.mods.GameModError
 import com.tyranor.next.core.game.mods.GameModException
+import com.tyranor.next.core.game.mods.GameModImporter
 import com.tyranor.next.core.game.mods.GameModInfo
 import com.tyranor.next.core.game.mods.GameModManager
 import com.tyranor.next.theme.AppComponentCornerRadius
@@ -45,6 +49,7 @@ import com.tyranor.next.theme.MiuixSettingsTheme
 import com.tyranor.next.theme.PageTextColor
 import com.tyranor.next.theme.glassBorder
 import com.tyranor.next.ui.common.AppAlertDialog
+import com.tyranor.next.ui.common.AppBottomSheet
 import com.tyranor.next.ui.common.AppNavItem
 import com.tyranor.next.ui.common.AppSecondaryTopBar
 import com.tyranor.next.ui.common.DialogTextButton
@@ -72,6 +77,10 @@ internal fun GameModsScreen(game: ScanGame) {
     var loadFailed by remember(game.uri) { mutableStateOf(false) }
     var busyId by remember(game.uri) { mutableStateOf<String?>(null) }
     var pendingRemove by remember(game.uri) { mutableStateOf<GameModInfo?>(null) }
+    var showImportSheet by remember(game.uri) { mutableStateOf(false) }
+    var importing by remember(game.uri) { mutableStateOf(false) }
+    var importSummary by remember(game.uri) { mutableStateOf<GameModImporter.Summary?>(null) }
+    val importer = remember { GameModImporter(context.applicationContext) }
 
     val versionFormat = stringResource(R.string.game_mods_version)
     val installedLabel = stringResource(R.string.game_mods_installed)
@@ -89,6 +98,9 @@ internal fun GameModsScreen(game: ScanGame) {
         GameModError.UNSUPPORTED_ENGINE to stringResource(R.string.game_mods_unsupported_engine),
         GameModError.ALREADY_INSTALLED to stringResource(R.string.game_mods_already_installed),
         GameModError.NOT_INSTALLED to stringResource(R.string.game_mods_not_installed_error),
+        GameModError.PLUGIN_EXISTS to stringResource(R.string.game_mods_import_duplicate),
+        GameModError.INVALID_ARCHIVE to stringResource(R.string.game_mods_import_invalid_archive),
+        GameModError.TOO_MANY to stringResource(R.string.game_mods_import_too_many),
         GameModError.IO to stringResource(R.string.game_mods_operation_failed),
     )
 
@@ -148,6 +160,55 @@ internal fun GameModsScreen(game: ScanGame) {
         }
     }
 
+    fun runImport(block: () -> GameModImporter.Summary) {
+        if (importing || busyId != null) return
+        importing = true
+        scope.launch {
+            try {
+                val summary = withContext(Dispatchers.IO) { block() }
+                refresh()
+                importSummary = summary
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: GameModException) {
+                AppNotice.makeText(
+                    context,
+                    errorMessages[e.error] ?: errorMessages.getValue(GameModError.IO),
+                    Toast.LENGTH_LONG,
+                    AppNotice.Kind.Failure,
+                ).show()
+            } catch (_: Throwable) {
+                AppNotice.makeText(
+                    context,
+                    errorMessages.getValue(GameModError.IO),
+                    Toast.LENGTH_LONG,
+                    AppNotice.Kind.Failure,
+                ).show()
+            } finally {
+                importing = false
+            }
+        }
+    }
+
+    val zipPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            showImportSheet = false
+            runImport { importer.importArchives(uris) }
+        }
+    }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            showImportSheet = false
+            runImport { importer.importTree(uri) }
+        }
+    }
+
     LaunchedEffect(game.uri) {
         refresh()
     }
@@ -163,12 +224,22 @@ internal fun GameModsScreen(game: ScanGame) {
                     background = Color.Transparent,
                     contentColor = PageTextColor,
                     trailing = {
-                        TopBarIcon(
-                            painterResource(R.drawable.ic_game_scan),
-                            stringResource(R.string.game_mods_refresh),
-                            MiuixTheme.colorScheme.primary,
-                        ) {
-                            scope.launch { refresh() }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            TopBarIcon(
+                                painterResource(R.drawable.ic_game_add),
+                                stringResource(R.string.game_mods_add),
+                                MiuixTheme.colorScheme.primary,
+                            ) {
+                                if (!importing) showImportSheet = true
+                            }
+                            TopBarIcon(
+                                painterResource(R.drawable.ic_game_scan),
+                                stringResource(R.string.game_mods_refresh),
+                                MiuixTheme.colorScheme.primary,
+                                spin = true,
+                            ) {
+                                if (!importing) scope.launch { refresh() }
+                            }
                         }
                     },
                 )
@@ -264,6 +335,85 @@ internal fun GameModsScreen(game: ScanGame) {
                 }
             }
         }
+    }
+
+    if (showImportSheet) {
+        AppBottomSheet(onDismissRequest = { showImportSheet = false }) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.game_mods_import_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+                Text(
+                    stringResource(R.string.game_mods_import_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+                AppNavItem(
+                    title = stringResource(R.string.game_mods_import_zip),
+                    summary = stringResource(R.string.game_mods_import_zip_hint),
+                    leadingIcon = R.drawable.ic_sheet_archive,
+                    onClick = {
+                        showImportSheet = false
+                        zipPicker.launch(arrayOf("*/*"))
+                    },
+                )
+                AppNavItem(
+                    title = stringResource(R.string.game_mods_import_folder),
+                    summary = stringResource(R.string.game_mods_import_folder_hint),
+                    leadingIcon = R.drawable.ic_sheet_folder,
+                    onClick = {
+                        showImportSheet = false
+                        folderPicker.launch(null)
+                    },
+                )
+            }
+        }
+    }
+
+    importSummary?.let { summary ->
+        val importedText = stringResource(R.string.game_mods_import_imported, summary.importedCount)
+        val skippedText = stringResource(R.string.game_mods_import_skipped, summary.skippedCount)
+        val failedText = stringResource(R.string.game_mods_import_failed, summary.failedCount)
+        val detail = summary.failed.take(6).joinToString("\n") { failure ->
+            val reason = errorMessages[failure.error] ?: errorMessages.getValue(GameModError.IO)
+            "${failure.source}: $reason"
+        }
+        AppAlertDialog(
+            onDismissRequest = { importSummary = null },
+            title = {
+                Text(
+                    stringResource(R.string.game_mods_import_result),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(importedText, style = MaterialTheme.typography.bodyMedium)
+                    Text(skippedText, style = MaterialTheme.typography.bodyMedium)
+                    Text(failedText, style = MaterialTheme.typography.bodyMedium)
+                    if (detail.isNotBlank()) {
+                        Text(
+                            detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                DialogTextButton(
+                    text = stringResource(R.string.common_confirm),
+                    onClick = { importSummary = null },
+                )
+            },
+        )
     }
 
     pendingRemove?.let { mod ->
