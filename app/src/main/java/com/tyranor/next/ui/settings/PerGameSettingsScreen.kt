@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -76,6 +77,7 @@ import com.tyranor.next.theme.glassBorder
 import com.tyranor.next.theme.AppComponentCornerRadius
 import com.tyranor.next.ui.save.description
 import com.tyranor.next.ui.common.AppAlertDialog
+import com.tyranor.next.ui.common.AppBottomSheet
 import com.tyranor.next.ui.common.NoIndication
 import com.tyranor.next.ui.common.DialogTextButton
 import androidx.compose.runtime.CompositionLocalProvider
@@ -112,6 +114,7 @@ import com.tyranor.next.ui.common.notice.AppNotice
  * 顶部右侧保存图标提交覆盖；左上返回。
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun PerGameSettingsScreen(game: ScanGame) {
     val ctx = LocalContext.current
     val gid = game.uri
@@ -467,6 +470,7 @@ fun PerGameSettingsScreen(game: ScanGame) {
     val globalXs4Msgskip = EngineSettingsStore.getXs4MsgskipDelay(ctx)
     // 从「Winlator 全局设置」返回时重新读取：否则自定义模式的「跟随全局」摘要会停在进入前的旧值。
     var globalWinlatorRevision by remember { mutableIntStateOf(0) }
+    var showWinlatorSheet by remember { mutableStateOf(false) }
     val globalWinlator = remember(globalWinlatorRevision) { EngineSettingsStore.loadWinlator(ctx) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -1699,12 +1703,7 @@ fun PerGameSettingsScreen(game: ScanGame) {
                                 summary = stringResource(R.string.engine_settings_winlator_global_entry_summary),
                                 // 已在 SectionCard（MiuixCard）内：卡内平面样式，避免卡片套卡片
                                 drawSurface = false,
-                                onClick = {
-                                    startActivityWithPageTransition(
-                                        ctx,
-                                        EngineSettingsActivity.createIntent(ctx, EngineSettingsKind.WINLATOR),
-                                    )
-                                },
+                                onClick = { showWinlatorSheet = true },
                             )
                         }
                     }
@@ -1798,6 +1797,47 @@ fun PerGameSettingsScreen(game: ScanGame) {
                 item(key = if (motionEnhanced) "bottomSpacer" else null) {
                     Box(listItemMotion(enabled = motionEnhanced).fillMaxWidth().navigationBarsPadding().height(12.dp))
                 }
+            }
+        }
+    }
+
+    if (showWinlatorSheet) {
+        AppBottomSheet(onDismissRequest = { showWinlatorSheet = false }) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.engine_settings_winlator_entry_sheet_title),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+                )
+                AppNavItem(
+                    title = stringResource(R.string.engine_settings_winlator_global_entry),
+                    summary = stringResource(R.string.engine_settings_winlator_global_entry_summary),
+                    leadingIcon = R.drawable.ic_settings_engine,
+                    containerColor = DialogItemSurface,
+                    onClick = {
+                        showWinlatorSheet = false
+                        startActivityWithPageTransition(
+                            ctx,
+                            EngineSettingsActivity.createIntent(ctx, EngineSettingsKind.WINLATOR),
+                        )
+                    },
+                )
+                AppNavItem(
+                    title = stringResource(R.string.engine_settings_winlator_presets_entry),
+                    summary = stringResource(R.string.engine_settings_winlator_presets_summary),
+                    leadingIcon = R.drawable.ic_engine_icon,
+                    containerColor = DialogItemSurface,
+                    onClick = {
+                        showWinlatorSheet = false
+                        startActivityWithPageTransition(ctx, WinlatorPresetActivity.createIntent(ctx))
+                    },
+                )
             }
         }
     }
