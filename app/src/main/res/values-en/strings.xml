@@ -26,9 +26,6 @@
     <string name="settings_app_title">App settings</string>
     <string name="settings_about_app">About app</string>
     <string name="settings_runtime_access">Available privileges</string>
-    <string name="settings_join_group">Join community</string>
-    <string name="settings_qq_group">QQ group</string>
-    <string name="settings_telegram_channel">Telegram channel</string>
     <string name="settings_privilege_title">Available privileges</string>
     <string name="settings_privilege_intro">Checks which authorization methods are available to this app. Shizuku must be installed and running; Root must be granted on this device.</string>
     <string name="settings_privilege_what_title">What is this?</string>

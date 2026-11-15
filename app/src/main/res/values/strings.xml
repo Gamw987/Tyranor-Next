@@ -26,9 +26,6 @@
     <string name="settings_app_title">应用设置</string>
     <string name="settings_about_app">关于应用</string>
     <string name="settings_runtime_access">可用特权</string>
-    <string name="settings_join_group">加入群聊</string>
-    <string name="settings_qq_group">企鹅群聊</string>
-    <string name="settings_telegram_channel">飞机频道</string>
     <string name="settings_privilege_title">可用特权</string>
     <string name="settings_privilege_intro">检测设备上可供本应用使用的授权方式。Shizuku 需要安装并启动；Root 需要在本机授权。</string>
     <string name="settings_privilege_what_title">这是什么？</string>

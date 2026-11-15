@@ -26,9 +26,6 @@
     <string name="settings_app_title">アプリ設定</string>
     <string name="settings_about_app">アプリについて</string>
     <string name="settings_runtime_access">利用可能な特権</string>
-    <string name="settings_join_group">コミュニティに参加</string>
-    <string name="settings_qq_group">QQ グループ</string>
-    <string name="settings_telegram_channel">Telegram チャンネル</string>
     <string name="settings_privilege_title">利用可能な特権</string>
     <string name="settings_privilege_intro">このアプリで利用できる認可方法を検出します。Shizuku はインストールして起動する必要があります。Root は端末側で許可が必要です。</string>
     <string name="settings_privilege_what_title">これは何？</string>
