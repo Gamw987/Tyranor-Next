@@ -566,6 +566,9 @@ dependencies {
   implementation(libs.miuix.preference)
   // 液态玻璃导航（圆角流体玻璃底部导航，参考 RinneMobile）
   implementation(libs.backdrop)
+  // Shizuku：ADB / Root 特权通道
+  implementation(libs.rikka.shizuku.api)
+  implementation(libs.rikka.shizuku.provider)
   // 首启解压 assets/nativeplugins/<engine>.zip.xz（LZMA2，构建期由 CompressXzArchive 生成）
   implementation(libs.xz)
   implementation(project(":engine"))

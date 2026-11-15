@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,10 +22,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
@@ -69,7 +73,9 @@ import com.tyranor.next.theme.MiuixSettingsTheme
 import com.tyranor.next.theme.glassBorder
 import com.tyranor.next.theme.AppComponentShape
 import com.tyranor.next.ui.common.AppAlertDialog
+import com.tyranor.next.ui.common.AppBottomSheet
 import com.tyranor.next.ui.common.AppNavItem
+import com.tyranor.next.ui.common.BoldChevronRight
 import com.tyranor.next.ui.common.AppScreenActivity
 import com.tyranor.next.ui.common.AppSecondaryTopBar
 import com.tyranor.next.ui.common.BottomInsetSpacer
@@ -121,6 +127,7 @@ class SaveManagementActivity : AppScreenActivity() {
  * Refreshes file counts and version panels after an operation while preserving typed failure messages.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun SaveManagementScreen(game: ScanGame) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -137,8 +144,11 @@ private fun SaveManagementScreen(game: ScanGame) {
     // 会话运行中/启动中：手动同步被拒绝的提示
     val saveBusyEngineRunningMessage = stringResource(R.string.save_busy_engine_running)
     val externalExitDoneMessage = stringResource(R.string.save_external_exit_done)
+    val immediateExitShizukuDone = stringResource(R.string.save_external_exit_now_shizuku_done)
     val immediateExitRootDone = stringResource(R.string.save_external_exit_now_root_done)
-    val immediateExitShellDone = stringResource(R.string.save_external_exit_now_shell_done)
+    val immediateExitCustomDone = stringResource(R.string.save_external_exit_now_custom_done)
+    val immediateExitBackgroundDone = stringResource(R.string.save_external_exit_now_background_done)
+    val immediateExitConfirmed = stringResource(R.string.save_external_exit_now_confirmed)
     val immediateExitFailed = stringResource(R.string.save_external_exit_now_failed)
     val saveFileDeleteFailed = stringResource(R.string.save_file_delete_failed)
     val externalPackages = remember(game.engine) {
@@ -159,7 +169,8 @@ private fun SaveManagementScreen(game: ScanGame) {
     var refreshError by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteFile by remember { mutableStateOf<GameSaveManager.SaveFileEntry?>(null) }
-    var showImmediateExit by remember { mutableStateOf(false) }
+    var showExternalExit by remember { mutableStateOf(false) }
+    var showSaveFiles by remember { mutableStateOf(false) }
     var hasImportedResources by remember { mutableStateOf(false) }
     var showClearImportedResources by remember { mutableStateOf(false) }
     var showExportFormatPicker by remember { mutableStateOf(false) }
@@ -172,9 +183,6 @@ private fun SaveManagementScreen(game: ScanGame) {
     // 导入/导出/删除互斥：并发任务会互相清掉对方的暂存目录，破坏导入的原子性
     var taskRunning by remember { mutableStateOf(false) }
     var versionsRevision by remember { mutableIntStateOf(0) }
-    var externalExitConfirmation by remember(game) {
-        mutableStateOf<SaveSyncRuntime.ExternalExitConfirmation?>(null)
-    }
 
     // 目录解析与文件递归遍历均为磁盘 IO：统一切到 IO 线程，避免组合期/主线程卡顿
     suspend fun refresh() {
@@ -310,12 +318,27 @@ private fun SaveManagementScreen(game: ScanGame) {
                                     }
                                     if (loadedLocation.available) {
                                         // 导入 / 导出 / 删除后文件数逐位滚动到新值（静止时就是同一段文字）
-                                        RollingNumberText(
-                                            stringResource(R.string.save_file_count, fileCount),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 4.dp),
-                                        )
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(AppComponentShape)
+                                                .clickable(enabled = fileCount > 0) { showSaveFiles = true }
+                                                .padding(top = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            RollingNumberText(
+                                                stringResource(R.string.save_file_count, fileCount),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            if (fileCount > 0) {
+                                                BoldChevronRight(
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(start = 8.dp),
+                                                )
+                                            }
+                                        }
                                     } else {
                                         Text(
                                             stringResource(R.string.save_unmanageable),
@@ -348,30 +371,14 @@ private fun SaveManagementScreen(game: ScanGame) {
                         cornerRadius = AppComponentCornerRadius,
                     ) {
                         Column(Modifier.padding(vertical = 4.dp)) {
-                            if (requiresExternalSaveExitConfirmation(game.engine) && externalPackages.isNotEmpty()) {
-                                AppNavItem(
-                                    title = stringResource(R.string.save_external_exit_now),
-                                    summary = stringResource(R.string.save_external_exit_now_summary),
-                                    showLeadingIcon = false,
-                                    showArrow = false,
-                                    drawSurface = false,
-                                    titleColor = MaterialTheme.colorScheme.error,
-                                    onClick = if (taskRunning) null else ({ showImmediateExit = true }),
-                                )
-                            }
                             if (requiresExternalSaveExitConfirmation(game.engine)) {
                                 AppNavItem(
-                                    title = stringResource(R.string.save_external_exit_title),
-                                    summary = stringResource(R.string.save_external_exit_summary),
+                                    title = stringResource(R.string.save_external_exit_action),
+                                    summary = stringResource(R.string.save_external_exit_action_summary),
                                     showLeadingIcon = false,
                                     showArrow = false,
                                     drawSurface = false,
-                                    onClick = if (taskRunning) null else ({
-                                        runSaveTask {
-                                            externalExitConfirmation = SaveSyncRuntime.externalExitConfirmation(context, game)
-                                            if (externalExitConfirmation == null) externalExitDoneMessage else null
-                                        }
-                                    }),
+                                    onClick = if (taskRunning) null else ({ showExternalExit = true }),
                                 )
                             }
                             AppNavItem(
@@ -435,55 +442,6 @@ private fun SaveManagementScreen(game: ScanGame) {
                         }
                     }
                 }
-                if (location?.available == true && saveFiles.isNotEmpty()) {
-                    item(key = "saveFiles") {
-                        MiuixCard(
-                            modifier = Modifier.staggeredEntrance(2).fillMaxWidth().glassBorder(),
-                            cornerRadius = AppComponentCornerRadius,
-                        ) {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text(
-                                    stringResource(R.string.save_files_title),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(bottom = 4.dp),
-                                )
-                                saveFiles.forEach { entry ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                entry.relativePath,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                "${Formatter.formatFileSize(context, entry.size)} · " +
-                                                    DateFormat.format("yyyy-MM-dd HH:mm", entry.lastModified),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                        IconButton(
-                                            enabled = !taskRunning,
-                                            onClick = { pendingDeleteFile = entry },
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_sheet_delete),
-                                                contentDescription = stringResource(R.string.save_file_delete),
-                                                tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(22.dp),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
                 if (location?.available == true) {
                     // 稳定 key：版本面板随存档位置可用而出现时淡入，下方留白平滑让位
                     item(key = "saveVersions") {
@@ -502,31 +460,74 @@ private fun SaveManagementScreen(game: ScanGame) {
         }
     }
 
-    if (showImmediateExit) {
+    if (showExternalExit) {
         AppAlertDialog(
-            onDismissRequest = { showImmediateExit = false },
-            title = { Text(stringResource(R.string.save_external_exit_now), style = MaterialTheme.typography.titleMedium) },
-            text = { Text(stringResource(R.string.save_external_exit_now_message), style = MaterialTheme.typography.bodyMedium) },
+            onDismissRequest = { if (!taskRunning) showExternalExit = false },
+            title = {
+                Text(
+                    stringResource(R.string.save_external_exit_action),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(R.string.save_external_exit_dialog_message),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        stringResource(R.string.save_external_exit_now_message),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
             confirmButton = {
-                DialogTextButton(
-                    text = stringResource(R.string.save_external_exit_now),
-                    enabled = !taskRunning,
-                    contentColor = MaterialTheme.colorScheme.error,
-                    onClick = {
-                        showImmediateExit = false
-                        runSaveTask {
-                            val result = RuntimeAccess.forceStop(context, externalPackages)
-                            when {
-                                result.usedRoot -> immediateExitRootDone
-                                result.failed.isEmpty() -> immediateExitShellDone
-                                else -> immediateExitFailed
+                if (externalPackages.isNotEmpty()) {
+                    DialogTextButton(
+                        text = stringResource(R.string.save_external_exit_now),
+                        enabled = !taskRunning,
+                        contentColor = MaterialTheme.colorScheme.error,
+                        onClick = {
+                            showExternalExit = false
+                            runSaveTask {
+                                val result = RuntimeAccess.forceStop(context, externalPackages)
+                                when {
+                                    result.usedShizuku || result.usedRoot || result.usedCustom -> {
+                                        val confirmation = SaveSyncRuntime.externalExitConfirmation(context, game)
+                                        if (confirmation != null) {
+                                            SaveSyncRuntime.confirmExternalExit(context, game, confirmation)
+                                        }
+                                        val channel = when {
+                                            result.usedShizuku -> immediateExitShizukuDone
+                                            result.usedRoot -> immediateExitRootDone
+                                            else -> immediateExitCustomDone
+                                        }
+                                        "$channel\n$immediateExitConfirmed"
+                                    }
+                                    result.failed.isEmpty() -> immediateExitBackgroundDone
+                                    else -> immediateExitFailed
+                                }
                             }
+                        },
+                    )
+                }
+            },
+            dismissButton = {
+                DialogTextButton(
+                    text = stringResource(R.string.save_external_exit_manual),
+                    enabled = !taskRunning,
+                    onClick = {
+                        showExternalExit = false
+                        runSaveTask {
+                            val confirmation = SaveSyncRuntime.externalExitConfirmation(context, game)
+                            if (confirmation != null) {
+                                SaveSyncRuntime.confirmExternalExit(context, game, confirmation)
+                            }
+                            externalExitDoneMessage
                         }
                     },
                 )
-            },
-            dismissButton = {
-                DialogTextButton(text = stringResource(R.string.common_cancel), onClick = { showImmediateExit = false })
             },
         )
     }
@@ -564,31 +565,49 @@ private fun SaveManagementScreen(game: ScanGame) {
         )
     }
 
-    externalExitConfirmation?.let { confirmation ->
-        AppAlertDialog(
-            onDismissRequest = { externalExitConfirmation = null },
-            title = { Text(stringResource(R.string.save_external_exit_title), style = MaterialTheme.typography.titleMedium) },
-            text = { Text(stringResource(R.string.save_external_exit_message, game.title), style = MaterialTheme.typography.bodyMedium) },
-            confirmButton = {
-                DialogTextButton(
-                    text = stringResource(R.string.common_confirm),
-                    enabled = !taskRunning,
-                    onClick = {
-                        externalExitConfirmation = null
-                        runSaveTask {
-                            SaveSyncRuntime.confirmExternalExit(context, game, confirmation)
-                            externalExitDoneMessage
+    if (showSaveFiles) {
+        AppBottomSheet(onDismissRequest = { showSaveFiles = false }) {
+            Column(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.save_files_title),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        )
+                        Text(
+                            stringResource(R.string.save_file_count, fileCount),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (saveFiles.isEmpty()) {
+                    Text(
+                        stringResource(R.string.save_files_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(saveFiles, key = { it.relativePath }) { entry ->
+                            SaveFileRow(
+                                entry = entry,
+                                enabled = !taskRunning,
+                                onDelete = { pendingDeleteFile = entry },
+                            )
                         }
-                    },
-                )
-            },
-            dismissButton = {
-                DialogTextButton(
-                    text = stringResource(R.string.common_cancel),
-                    onClick = { externalExitConfirmation = null },
-                )
-            },
-        )
+                    }
+                }
+            }
+        }
     }
 
     // MV/MZ 导出格式选择：保留原有的格式确认与说明。
@@ -679,6 +698,52 @@ private fun SaveManagementScreen(game: ScanGame) {
                 DialogTextButton(text = stringResource(R.string.common_cancel), onClick = { showDeleteConfirm = false })
             },
         )
+    }
+}
+
+@Composable
+private fun SaveFileRow(
+    entry: GameSaveManager.SaveFileEntry,
+    enabled: Boolean,
+    onDelete: () -> Unit,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(AppComponentShape)
+            .background(DialogItemSurface)
+            .glassBorder()
+            .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.ic_engine_item),
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+        )
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            Text(
+                entry.relativePath,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "${Formatter.formatFileSize(context, entry.size)} · " +
+                    DateFormat.format("yyyy-MM-dd HH:mm", entry.lastModified),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(enabled = enabled, onClick = onDelete) {
+            Icon(
+                painter = painterResource(R.drawable.ic_sheet_delete),
+                contentDescription = stringResource(R.string.save_file_delete),
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(22.dp),
+            )
+        }
     }
 }
 

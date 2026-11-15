@@ -79,7 +79,6 @@ import com.tyranor.next.core.settings.AppearanceStyle
 import com.tyranor.next.core.settings.GraphicsCapabilities
 import com.tyranor.next.core.settings.GraphicsFamily
 import com.tyranor.next.core.settings.GraphicsSettings
-import com.tyranor.next.core.system.RuntimeAccess
 import com.tyranor.next.core.settings.EngineSettingsStore
 import com.tyranor.next.core.game.storage.GameLibraryFacade
 import com.tyranor.next.theme.AppThemeColors
@@ -183,9 +182,6 @@ fun SettingsScreen(
     var activeCandidate by remember { mutableStateOf<UpdateCandidate?>(null) }
     var updateDownloadPhase by remember { mutableStateOf<UpdateDownloadPhase?>(null) }
     var updateDownloadJob by remember { mutableStateOf<Job?>(null) }
-    var showRuntimeAccess by remember { mutableStateOf(false) }
-    var runtimeProbeBusy by remember { mutableStateOf(false) }
-    var runtimeStatus by remember { mutableStateOf<RuntimeAccess.Status?>(null) }
     var showScanDirs by rememberSaveable { mutableStateOf(false) }
     var scanDirs by remember { mutableStateOf(emptyList<String>()) }
     val resourceCleanup: SystemNnnCleanupViewModel = viewModel()
@@ -429,7 +425,7 @@ fun SettingsScreen(
                         modifier = Modifier.staggeredEntrance(4),
                         title = stringResource(R.string.settings_runtime_access),
                         iconRes = R.drawable.ic_settings_engine,
-                        onClick = { showRuntimeAccess = true },
+                        onClick = { startActivityWithPageTransition(ctx, RuntimeAccessActivity.createIntent(ctx)) },
                     )
                 }
                 item {
@@ -651,75 +647,6 @@ fun SettingsScreen(
                         },
                     )
                 }
-            },
-        )
-    }
-
-    if (showRuntimeAccess) {
-        val status = runtimeStatus
-        AppAlertDialog(
-            onDismissRequest = { if (!runtimeProbeBusy) showRuntimeAccess = false },
-            title = {
-                Text(
-                    stringResource(R.string.settings_runtime_access),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        stringResource(R.string.settings_runtime_access_hint),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        stringResource(
-                            R.string.settings_runtime_shell,
-                            when {
-                                status == null -> stringResource(R.string.settings_runtime_unchecked)
-                                status.shellReady -> stringResource(R.string.settings_runtime_ready)
-                                else -> stringResource(R.string.settings_runtime_unavailable)
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        stringResource(
-                            R.string.settings_runtime_root,
-                            when {
-                                status == null -> stringResource(R.string.settings_runtime_unchecked)
-                                status.rootReady -> stringResource(R.string.settings_runtime_ready)
-                                else -> stringResource(R.string.settings_runtime_unavailable)
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            },
-            confirmButton = {
-                DialogTextButton(
-                    text = if (runtimeProbeBusy) {
-                        stringResource(R.string.settings_runtime_checking)
-                    } else {
-                        stringResource(R.string.settings_runtime_check)
-                    },
-                    enabled = !runtimeProbeBusy,
-                    onClick = {
-                        runtimeProbeBusy = true
-                        scope.launch {
-                            val result = withContext(Dispatchers.IO) { RuntimeAccess.probe() }
-                            runtimeStatus = result
-                            runtimeProbeBusy = false
-                        }
-                    },
-                )
-            },
-            dismissButton = {
-                DialogTextButton(
-                    text = stringResource(R.string.common_cancel),
-                    enabled = !runtimeProbeBusy,
-                    onClick = { showRuntimeAccess = false },
-                )
             },
         )
     }
