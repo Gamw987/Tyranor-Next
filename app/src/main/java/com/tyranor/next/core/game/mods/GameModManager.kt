@@ -5,6 +5,12 @@ import com.tyranor.next.core.game.model.GamePathUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
+import java.nio.file.FileVisitResult
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -16,7 +22,7 @@ data class GameModInfo(
     val name: String,
     val version: String,
     val description: String,
-    val installed: Boolean,
+    val enabled: Boolean,
 )
 
 /** 游戏 Mod 操作的可预期失败类型；文案由 UI 层映射。 */
@@ -26,8 +32,9 @@ enum class GameModError {
     PLUGIN_NOT_FOUND,
     INVALID_MANIFEST,
     UNSUPPORTED_ENGINE,
-    ALREADY_INSTALLED,
-    NOT_INSTALLED,
+    ALREADY_ENABLED,
+    NOT_ENABLED,
+    IN_USE,
     PLUGIN_EXISTS,
     INVALID_ARCHIVE,
     TOO_MANY,
@@ -100,20 +107,20 @@ object GameModManager {
                     name = manifest.name,
                     version = manifest.version,
                     description = manifest.description,
-                    installed = findState(game, manifest.id) != null,
+                    enabled = findState(game, manifest.id) != null,
                 )
             }
             .sortedBy { it.name.lowercase(Locale.ROOT) }
             .toList()
     }
 
-    fun install(gameUri: String, pluginId: String) {
+    fun enable(gameUri: String, pluginId: String) {
         if (!SAFE_ID.matches(pluginId)) throw GameModException(GameModError.INVALID_MANIFEST)
         val game = requireGame(gameUri)
         val pluginDir = File(pluginsRoot(), pluginId)
         val manifest = readManifest(pluginDir)
         if (manifest.engine != ENGINE) throw GameModException(GameModError.UNSUPPORTED_ENGINE)
-        if (findState(game, pluginId) != null) throw GameModException(GameModError.ALREADY_INSTALLED)
+        if (findState(game, pluginId) != null) throw GameModException(GameModError.ALREADY_ENABLED)
 
         val key = stateKey(game)
         val installed = JSONArray()
@@ -195,15 +202,15 @@ object GameModManager {
         }
     }
 
-    fun remove(gameUri: String, pluginId: String) {
+    fun disable(gameUri: String, pluginId: String) {
         if (!SAFE_ID.matches(pluginId)) throw GameModException(GameModError.INVALID_MANIFEST)
         val game = requireGame(gameUri)
         val stateFile = findState(game, pluginId)
-            ?: throw GameModException(GameModError.NOT_INSTALLED)
+            ?: throw GameModException(GameModError.NOT_ENABLED)
         val state = runCatching { JSONObject(stateFile.readText()) }
             .getOrElse { throw GameModException(GameModError.INVALID_MANIFEST, it) }
         if (state.optString("plugin") != pluginId) {
-            throw GameModException(GameModError.NOT_INSTALLED)
+            throw GameModException(GameModError.NOT_ENABLED)
         }
 
         try {
@@ -247,6 +254,64 @@ object GameModManager {
         } catch (e: Exception) {
             throw GameModException(GameModError.IO, e)
         }
+    }
+
+    /**
+     * Deletes a plugin from the shared library. The plugin must not remain enabled
+     * in another game; the current game is disabled first so its files are restored.
+     */
+    fun delete(gameUri: String, pluginId: String) {
+        if (!SAFE_ID.matches(pluginId)) throw GameModException(GameModError.INVALID_MANIFEST)
+        val game = requireGame(gameUri)
+        val pluginDir = File(pluginsRoot(), pluginId).canonicalFile
+        if (!pluginDir.isDirectory) throw GameModException(GameModError.PLUGIN_NOT_FOUND)
+        readManifest(pluginDir)
+
+        val currentState = findState(game, pluginId)?.canonicalFile
+        val otherStates = stateFilesFor(pluginId).filter { it.canonicalFile != currentState }
+        if (otherStates.isNotEmpty()) throw GameModException(GameModError.IN_USE)
+
+        try {
+            if (currentState != null) disable(gameUri, pluginId)
+            deletePluginDirectory(pluginDir)
+        } catch (cancelled: java.util.concurrent.CancellationException) {
+            throw cancelled
+        } catch (e: GameModException) {
+            throw e
+        } catch (e: Exception) {
+            throw GameModException(GameModError.IO, e)
+        }
+    }
+
+    private fun stateFilesFor(pluginId: String): List<File> =
+        stateRoot().listFiles()
+            .orEmpty()
+            .filter { it.isFile && it.name.endsWith(".json") }
+            .filter { file ->
+                runCatching { JSONObject(file.readText()).optString("plugin") == pluginId }
+                    .getOrDefault(false)
+            }
+
+    private fun deletePluginDirectory(pluginDir: File) {
+        val parent = pluginsRoot().canonicalFile
+        val target = pluginDir.canonicalFile
+        if (target.parentFile != parent) throw GameModException(GameModError.INVALID_MANIFEST)
+        Files.walkFileTree(
+            target.toPath(),
+            object : SimpleFileVisitor<Path>() {
+                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    Files.delete(file)
+                    return FileVisitResult.CONTINUE
+                }
+
+                override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult {
+                    if (exc != null) throw exc
+                    Files.delete(dir)
+                    return FileVisitResult.CONTINUE
+                }
+            },
+        )
+        if (target.exists()) throw GameModException(GameModError.IO)
     }
 
     private fun requireGame(gameUri: String): File {

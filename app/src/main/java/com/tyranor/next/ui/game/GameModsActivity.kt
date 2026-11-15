@@ -8,7 +8,7 @@ import com.tyranor.next.core.game.model.ScanGameIntents
 import com.tyranor.next.ui.common.AppScreenActivity
 import com.tyranor.next.ui.common.motion.ProvideEntrance
 
-/** 单游戏 Mod 页：列出 GameMods 插件并安装 / 卸载。 */
+/** 单游戏 Mod 页：列出 GameMods 插件并启用 / 禁用。 */
 class GameModsActivity : AppScreenActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

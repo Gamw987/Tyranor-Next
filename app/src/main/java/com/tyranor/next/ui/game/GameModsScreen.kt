@@ -54,6 +54,7 @@ import com.tyranor.next.ui.common.AppBottomSheet
 import com.tyranor.next.ui.common.AppNavItem
 import com.tyranor.next.ui.common.AppSecondaryTopBar
 import com.tyranor.next.ui.common.DialogTextButton
+import com.tyranor.next.ui.common.NoRippleTextButton
 import com.tyranor.next.ui.common.TopBarIcon
 import com.tyranor.next.ui.common.motion.DelayedProgress
 import com.tyranor.next.ui.common.motion.listItemMotion
@@ -68,7 +69,7 @@ import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** 单游戏 Mod 列表：读取 GameMods 插件，安装 / 卸载后原地刷新。 */
+/** 单游戏 Mod 列表：读取 GameMods 插件，启用 / 禁用后原地刷新。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun GameModsScreen(game: ScanGame) {
@@ -78,28 +79,31 @@ internal fun GameModsScreen(game: ScanGame) {
     var loading by remember(game.uri) { mutableStateOf(true) }
     var loadFailed by remember(game.uri) { mutableStateOf(false) }
     var busyId by remember(game.uri) { mutableStateOf<String?>(null) }
-    var pendingRemove by remember(game.uri) { mutableStateOf<GameModInfo?>(null) }
+    var pendingDelete by remember(game.uri) { mutableStateOf<GameModInfo?>(null) }
     var showImportSheet by remember(game.uri) { mutableStateOf(false) }
     var importing by remember(game.uri) { mutableStateOf(false) }
     var importSummary by remember(game.uri) { mutableStateOf<GameModImporter.Summary?>(null) }
     val importer = remember { GameModImporter(context.applicationContext) }
 
     val versionFormat = stringResource(R.string.game_mods_version)
-    val installedLabel = stringResource(R.string.game_mods_installed)
-    val notInstalledLabel = stringResource(R.string.game_mods_not_installed)
-    val installLabel = stringResource(R.string.game_mods_install)
-    val removeLabel = stringResource(R.string.game_mods_remove)
+    val enabledLabel = stringResource(R.string.game_mods_installed)
+    val disabledLabel = stringResource(R.string.game_mods_not_installed)
+    val enableLabel = stringResource(R.string.game_mods_install)
+    val disableLabel = stringResource(R.string.game_mods_remove)
+    val deleteLabel = stringResource(R.string.game_mods_delete)
     val busyLabel = stringResource(R.string.game_mods_busy)
-    val installSuccessFormat = stringResource(R.string.game_mods_install_success)
-    val removeSuccessFormat = stringResource(R.string.game_mods_remove_success)
+    val enableSuccessFormat = stringResource(R.string.game_mods_install_success)
+    val disableSuccessFormat = stringResource(R.string.game_mods_remove_success)
+    val deleteSuccessFormat = stringResource(R.string.game_mods_delete_success)
     val errorMessages = mapOf(
         GameModError.ROOT_MISSING to stringResource(R.string.game_mods_root_missing),
         GameModError.INVALID_GAME to stringResource(R.string.game_mods_invalid_game),
         GameModError.PLUGIN_NOT_FOUND to stringResource(R.string.game_mods_plugin_missing),
         GameModError.INVALID_MANIFEST to stringResource(R.string.game_mods_invalid_manifest),
         GameModError.UNSUPPORTED_ENGINE to stringResource(R.string.game_mods_unsupported_engine),
-        GameModError.ALREADY_INSTALLED to stringResource(R.string.game_mods_already_installed),
-        GameModError.NOT_INSTALLED to stringResource(R.string.game_mods_not_installed_error),
+        GameModError.ALREADY_ENABLED to stringResource(R.string.game_mods_already_installed),
+        GameModError.NOT_ENABLED to stringResource(R.string.game_mods_not_installed_error),
+        GameModError.IN_USE to stringResource(R.string.game_mods_delete_in_use),
         GameModError.PLUGIN_EXISTS to stringResource(R.string.game_mods_import_duplicate),
         GameModError.INVALID_ARCHIVE to stringResource(R.string.game_mods_import_invalid_archive),
         GameModError.TOO_MANY to stringResource(R.string.game_mods_import_too_many),
@@ -120,22 +124,15 @@ internal fun GameModsScreen(game: ScanGame) {
         }
     }
 
-    fun runAction(mod: GameModInfo, install: Boolean) {
+    fun runAction(mod: GameModInfo, successFormat: String, block: suspend () -> Unit) {
         if (busyId != null) return
         busyId = mod.id
         scope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    if (install) {
-                        GameModManager.install(game.uri, mod.id)
-                    } else {
-                        GameModManager.remove(game.uri, mod.id)
-                    }
-                }
-                val pattern = if (install) installSuccessFormat else removeSuccessFormat
+                withContext(Dispatchers.IO) { block() }
                 AppNotice.makeText(
                     context,
-                    String.format(pattern, mod.name),
+                    String.format(successFormat, mod.name),
                     Toast.LENGTH_SHORT,
                     AppNotice.Kind.Success,
                 ).show()
@@ -159,6 +156,20 @@ internal fun GameModsScreen(game: ScanGame) {
             } finally {
                 busyId = null
             }
+        }
+    }
+
+    fun runToggle(mod: GameModInfo) {
+        val enable = !mod.enabled
+        runAction(mod, if (enable) enableSuccessFormat else disableSuccessFormat) {
+            if (enable) GameModManager.enable(game.uri, mod.id)
+            else GameModManager.disable(game.uri, mod.id)
+        }
+    }
+
+    fun runDelete(mod: GameModInfo) {
+        runAction(mod, deleteSuccessFormat) {
+            GameModManager.delete(game.uri, mod.id)
         }
     }
 
@@ -322,17 +333,18 @@ internal fun GameModsScreen(game: ScanGame) {
                     GameModCard(
                         mod = mod,
                         busy = busyId == mod.id,
-                        installLabel = installLabel,
-                        removeLabel = removeLabel,
+                        enableLabel = enableLabel,
+                        disableLabel = disableLabel,
+                        deleteLabel = deleteLabel,
                         busyLabel = busyLabel,
-                        installedLabel = installedLabel,
-                        notInstalledLabel = notInstalledLabel,
+                        enabledLabel = enabledLabel,
+                        disabledLabel = disabledLabel,
                         versionFormat = versionFormat,
                         modifier = Modifier
                             .staggeredEntrance(index + 1)
                             .then(listItemMotion()),
-                        onInstall = { runAction(mod, install = true) },
-                        onRemove = { pendingRemove = mod },
+                        onToggle = { runToggle(mod) },
+                        onDelete = { pendingDelete = mod },
                     )
                 }
             }
@@ -418,35 +430,35 @@ internal fun GameModsScreen(game: ScanGame) {
         )
     }
 
-    pendingRemove?.let { mod ->
+    pendingDelete?.let { mod ->
         AppAlertDialog(
-            onDismissRequest = { pendingRemove = null },
+            onDismissRequest = { pendingDelete = null },
             title = {
                 Text(
-                    stringResource(R.string.game_mods_remove_title),
+                    stringResource(R.string.game_mods_delete_title),
                     style = MaterialTheme.typography.titleMedium,
                 )
             },
             text = {
                 Text(
-                    stringResource(R.string.game_mods_remove_message, mod.name),
+                    stringResource(R.string.game_mods_delete_message, mod.name),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
             confirmButton = {
                 DialogTextButton(
-                    text = removeLabel,
+                    text = deleteLabel,
                     contentColor = MaterialTheme.colorScheme.error,
                     onClick = {
-                        pendingRemove = null
-                        runAction(mod, install = false)
+                        pendingDelete = null
+                        runDelete(mod)
                     },
                 )
             },
             dismissButton = {
                 DialogTextButton(
                     text = stringResource(R.string.common_cancel),
-                    onClick = { pendingRemove = null },
+                    onClick = { pendingDelete = null },
                 )
             },
         )
@@ -457,23 +469,31 @@ internal fun GameModsScreen(game: ScanGame) {
 private fun GameModCard(
     mod: GameModInfo,
     busy: Boolean,
-    installLabel: String,
-    removeLabel: String,
+    enableLabel: String,
+    disableLabel: String,
+    deleteLabel: String,
     busyLabel: String,
-    installedLabel: String,
-    notInstalledLabel: String,
+    enabledLabel: String,
+    disabledLabel: String,
     versionFormat: String,
     modifier: Modifier = Modifier,
-    onInstall: () -> Unit,
-    onRemove: () -> Unit,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     MiuixCard(
         modifier = modifier.fillMaxWidth().glassBorder(),
         cornerRadius = AppComponentCornerRadius,
     ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                NoRippleTextButton(
+                    text = if (mod.enabled) disableLabel else enableLabel,
+                    enabled = !busy,
+                    contentColor = if (mod.enabled) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+                    onClick = onToggle,
+                )
+                Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
                     Text(
                         mod.name,
                         style = MaterialTheme.typography.titleMedium,
@@ -486,12 +506,25 @@ private fun GameModCard(
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
+                    Text(
+                        when {
+                            busy -> busyLabel
+                            mod.enabled -> enabledLabel
+                            else -> disabledLabel
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            busy -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            mod.enabled -> MaterialTheme.colorScheme.primary
+                            else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+                        },
+                    )
                 }
-                Text(
-                    if (mod.installed) installedLabel else notInstalledLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (mod.installed) MaterialTheme.colorScheme.primary
-                    else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                NoRippleTextButton(
+                    text = deleteLabel,
+                    enabled = !busy,
+                    contentColor = MaterialTheme.colorScheme.error,
+                    onClick = onDelete,
                 )
             }
             if (mod.description.isNotBlank()) {
@@ -499,28 +532,9 @@ private fun GameModCard(
                     mod.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp),
                 )
             }
-            AppNavItem(
-                title = when {
-                    busy -> busyLabel
-                    mod.installed -> removeLabel
-                    else -> installLabel
-                },
-                showLeadingIcon = false,
-                showArrow = false,
-                drawSurface = false,
-                verticalPadding = 10.dp,
-                titleColor = if (mod.installed) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary,
-                onClick = when {
-                    busy -> null
-                    mod.installed -> onRemove
-                    else -> onInstall
-                },
-                modifier = Modifier.padding(top = 8.dp),
-            )
         }
     }
 }

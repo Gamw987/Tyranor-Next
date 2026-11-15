@@ -182,6 +182,7 @@ fun SettingsScreen(
     var activeCandidate by remember { mutableStateOf<UpdateCandidate?>(null) }
     var updateDownloadPhase by remember { mutableStateOf<UpdateDownloadPhase?>(null) }
     var updateDownloadJob by remember { mutableStateOf<Job?>(null) }
+    var showGroupDialog by remember { mutableStateOf(false) }
     var showScanDirs by rememberSaveable { mutableStateOf(false) }
     var scanDirs by remember { mutableStateOf(emptyList<String>()) }
     val resourceCleanup: SystemNnnCleanupViewModel = viewModel()
@@ -426,6 +427,14 @@ fun SettingsScreen(
                 item {
                     SettingsEntryCard(
                         modifier = Modifier.staggeredEntrance(4),
+                        title = stringResource(R.string.settings_join_group),
+                        iconRes = R.drawable.ic_settings_group,
+                        onClick = { showGroupDialog = true },
+                    )
+                }
+                item {
+                    SettingsEntryCard(
+                        modifier = Modifier.staggeredEntrance(5),
                         title = stringResource(R.string.settings_runtime_access),
                         iconRes = R.drawable.ic_settings_engine,
                         onClick = { startActivityWithPageTransition(ctx, RuntimeAccessActivity.createIntent(ctx)) },
@@ -433,7 +442,7 @@ fun SettingsScreen(
                 }
                 item {
                     SettingsEntryCard(
-                        modifier = Modifier.staggeredEntrance(5),
+                        modifier = Modifier.staggeredEntrance(6),
                         title = stringResource(R.string.settings_about_app),
                         iconRes = R.drawable.ic_settings_about,
                         onClick = { startActivityWithPageTransition(ctx, AboutAppActivity.createIntent(ctx)) },
@@ -650,6 +659,46 @@ fun SettingsScreen(
                         },
                     )
                 }
+            },
+        )
+    }
+
+    if (showGroupDialog) {
+        AppAlertDialog(
+            onDismissRequest = { showGroupDialog = false },
+            title = { Text(stringResource(R.string.settings_join_group), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AppNavItem(
+                        stringResource(R.string.settings_qq_group),
+                        modifier = Modifier.staggeredEntrance(1, distance = 10.dp, stepMillis = 40L),
+                        leadingIcon = R.drawable.ic_group_qq,
+                        containerColor = DialogItemSurface,
+                        indication = null,
+                    ) {
+                        showGroupDialog = false
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://qm.qq.com/q/M9JH8A9Yys")))
+                    }
+                    AppNavItem(
+                        stringResource(R.string.settings_telegram_channel),
+                        modifier = Modifier.staggeredEntrance(2, distance = 10.dp, stepMillis = 40L),
+                        leadingIcon = R.drawable.ic_group_telegram,
+                        containerColor = DialogItemSurface,
+                        indication = null,
+                    ) {
+                        showGroupDialog = false
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/tyranornext")))
+                    }
+                }
+            },
+            confirmButton = {
+                DialogTextButton(
+                    text = stringResource(R.string.common_cancel),
+                    onClick = { showGroupDialog = false },
+                )
             },
         )
     }
