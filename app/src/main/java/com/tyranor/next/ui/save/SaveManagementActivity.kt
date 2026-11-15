@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.format.DateFormat
+import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,6 +14,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,8 +36,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +56,10 @@ import com.tyranor.next.core.game.save.sync.requiresExternalSaveExitConfirmation
 import com.tyranor.next.core.game.launch.EngineLauncher
 import com.tyranor.next.core.game.model.ScanGame
 import com.tyranor.next.core.game.model.ScanGameIntents
+import com.tyranor.next.core.engine.external.RenPy77ExternalEngineModule
+import com.tyranor.next.core.engine.external.RenPyExternalEngineModule
+import com.tyranor.next.core.engine.external.WinlatorContract
+import com.tyranor.next.core.system.RuntimeAccess
 import com.tyranor.next.theme.PageTextColor
 import com.tyranor.next.theme.NavWhite
 import com.tyranor.next.theme.TextColor
@@ -125,12 +137,29 @@ private fun SaveManagementScreen(game: ScanGame) {
     // 会话运行中/启动中：手动同步被拒绝的提示
     val saveBusyEngineRunningMessage = stringResource(R.string.save_busy_engine_running)
     val externalExitDoneMessage = stringResource(R.string.save_external_exit_done)
+    val immediateExitRootDone = stringResource(R.string.save_external_exit_now_root_done)
+    val immediateExitShellDone = stringResource(R.string.save_external_exit_now_shell_done)
+    val immediateExitFailed = stringResource(R.string.save_external_exit_now_failed)
+    val saveFileDeleteFailed = stringResource(R.string.save_file_delete_failed)
+    val externalPackages = remember(game.engine) {
+        when (game.engine) {
+            EngineType.YURIS, EngineType.CATSYSTEM2, EngineType.PC -> listOf(WinlatorContract.PACKAGE_NAME)
+            EngineType.RENPY -> listOf(
+                RenPyExternalEngineModule.packageName,
+                RenPy77ExternalEngineModule.packageName,
+            )
+            else -> emptyList()
+        }
+    }
     val clearImportedResourcesDone = stringResource(R.string.save_systemnnn_clear_resources_done)
     val manager = remember { GameSaveManager(context) }
     var location by remember { mutableStateOf<GameSaveManager.SaveLocation?>(null) }
     var fileCount by remember { mutableStateOf(0) }
+    var saveFiles by remember { mutableStateOf<List<GameSaveManager.SaveFileEntry>>(emptyList()) }
     var refreshError by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var pendingDeleteFile by remember { mutableStateOf<GameSaveManager.SaveFileEntry?>(null) }
+    var showImmediateExit by remember { mutableStateOf(false) }
     var hasImportedResources by remember { mutableStateOf(false) }
     var showClearImportedResources by remember { mutableStateOf(false) }
     var showExportFormatPicker by remember { mutableStateOf(false) }
@@ -153,6 +182,7 @@ private fun SaveManagementScreen(game: ScanGame) {
             val snapshot = withContext(Dispatchers.IO) { manager.inspectSaves(game) }
             location = snapshot.location
             fileCount = snapshot.fileCount
+            saveFiles = snapshot.files
             hasImportedResources = snapshot.hasImportedResources
             refreshError = null
             versionsRevision++
@@ -161,6 +191,7 @@ private fun SaveManagementScreen(game: ScanGame) {
         } catch (failure: Exception) {
             location = null
             fileCount = 0
+            saveFiles = emptyList()
             hasImportedResources = false
             refreshError = failure.toSaveErrorMessage(context, saveOperationFailedMessage)
         }
@@ -317,6 +348,17 @@ private fun SaveManagementScreen(game: ScanGame) {
                         cornerRadius = AppComponentCornerRadius,
                     ) {
                         Column(Modifier.padding(vertical = 4.dp)) {
+                            if (requiresExternalSaveExitConfirmation(game.engine) && externalPackages.isNotEmpty()) {
+                                AppNavItem(
+                                    title = stringResource(R.string.save_external_exit_now),
+                                    summary = stringResource(R.string.save_external_exit_now_summary),
+                                    showLeadingIcon = false,
+                                    showArrow = false,
+                                    drawSurface = false,
+                                    titleColor = MaterialTheme.colorScheme.error,
+                                    onClick = if (taskRunning) null else ({ showImmediateExit = true }),
+                                )
+                            }
                             if (requiresExternalSaveExitConfirmation(game.engine)) {
                                 AppNavItem(
                                     title = stringResource(R.string.save_external_exit_title),
@@ -393,11 +435,60 @@ private fun SaveManagementScreen(game: ScanGame) {
                         }
                     }
                 }
+                if (location?.available == true && saveFiles.isNotEmpty()) {
+                    item(key = "saveFiles") {
+                        MiuixCard(
+                            modifier = Modifier.staggeredEntrance(2).fillMaxWidth().glassBorder(),
+                            cornerRadius = AppComponentCornerRadius,
+                        ) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Text(
+                                    stringResource(R.string.save_files_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                )
+                                saveFiles.forEach { entry ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                entry.relativePath,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                "${Formatter.formatFileSize(context, entry.size)} · " +
+                                                    DateFormat.format("yyyy-MM-dd HH:mm", entry.lastModified),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        IconButton(
+                                            enabled = !taskRunning,
+                                            onClick = { pendingDeleteFile = entry },
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_sheet_delete),
+                                                contentDescription = stringResource(R.string.save_file_delete),
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(22.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 if (location?.available == true) {
                     // 稳定 key：版本面板随存档位置可用而出现时淡入，下方留白平滑让位
                     item(key = "saveVersions") {
                         Column(
-                            listItemMotion().staggeredEntrance(2),
+                            listItemMotion().staggeredEntrance(3),
                         ) {
                             SaveVersionsPanel(game, taskRunning, versionsRevision) { block ->
                                 runSaveTask(block = block, shortFeedback = true)
@@ -409,6 +500,68 @@ private fun SaveManagementScreen(game: ScanGame) {
             }
         }
         }
+    }
+
+    if (showImmediateExit) {
+        AppAlertDialog(
+            onDismissRequest = { showImmediateExit = false },
+            title = { Text(stringResource(R.string.save_external_exit_now), style = MaterialTheme.typography.titleMedium) },
+            text = { Text(stringResource(R.string.save_external_exit_now_message), style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = {
+                DialogTextButton(
+                    text = stringResource(R.string.save_external_exit_now),
+                    enabled = !taskRunning,
+                    contentColor = MaterialTheme.colorScheme.error,
+                    onClick = {
+                        showImmediateExit = false
+                        runSaveTask {
+                            val result = RuntimeAccess.forceStop(context, externalPackages)
+                            when {
+                                result.usedRoot -> immediateExitRootDone
+                                result.failed.isEmpty() -> immediateExitShellDone
+                                else -> immediateExitFailed
+                            }
+                        }
+                    },
+                )
+            },
+            dismissButton = {
+                DialogTextButton(text = stringResource(R.string.common_cancel), onClick = { showImmediateExit = false })
+            },
+        )
+    }
+
+    pendingDeleteFile?.let { entry ->
+        AppAlertDialog(
+            onDismissRequest = { pendingDeleteFile = null },
+            title = { Text(stringResource(R.string.save_file_delete), style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Text(
+                    stringResource(R.string.save_file_delete_message, entry.relativePath),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                DialogTextButton(
+                    text = stringResource(R.string.common_delete),
+                    enabled = !taskRunning,
+                    contentColor = MaterialTheme.colorScheme.error,
+                    onClick = {
+                        pendingDeleteFile = null
+                        runSaveTask {
+                            if (manager.deleteSaveFile(game, entry.relativePath)) {
+                                saveDeletedCountFormat.format(1)
+                            } else {
+                                saveFileDeleteFailed
+                            }
+                        }
+                    },
+                )
+            },
+            dismissButton = {
+                DialogTextButton(text = stringResource(R.string.common_cancel), onClick = { pendingDeleteFile = null })
+            },
+        )
     }
 
     externalExitConfirmation?.let { confirmation ->

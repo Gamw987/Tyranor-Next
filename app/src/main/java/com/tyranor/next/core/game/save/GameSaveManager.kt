@@ -350,25 +350,92 @@ class GameSaveManager(private val context: Context) {
         }
     }
 
+    data class SaveFileEntry(
+        val relativePath: String,
+        val size: Long,
+        val lastModified: Long,
+    )
+
     internal data class SaveListSnapshot(
         val location: SaveLocation,
         val fileCount: Int,
+        val files: List<SaveFileEntry> = emptyList(),
         val hasImportedResources: Boolean = false,
     )
 
     internal suspend fun inspectSaves(game: ScanGame): SaveListSnapshot {
         if (game.engine == EngineType.SYSTEMNNN) return withSystemNnnSourceLock(game) {
             val location = resolveSaveLocation(game)
-            val count = if (location.available) {
+            val entries = if (location.available) {
                 val store = systemNnnStore(game, location.directory)
-                store.access { store.files().size }
-            } else 0
-            SaveListSnapshot(location, count, hasImportedSystemNnnResources(game))
+                store.access { store.files().map { (relative, file) -> entry(relative, file) } }
+            } else emptyList()
+            SaveListSnapshot(location, entries.size, entries, hasImportedSystemNnnResources(game))
         }
         val location = resolveSaveLocation(game)
         val files = if (game.engine == EngineType.ETHORNELL) listSaveFiles(game)
         else listDirectorySaveFiles(game.engine, location)
-        return SaveListSnapshot(location, files.size)
+        val root = location.directory
+        val entries = if (root == null) emptyList() else files.mapNotNull { file ->
+            runCatching {
+                entry(file.relativeTo(root).invariantSeparatorsPath, file)
+            }.getOrNull()
+        }
+        return SaveListSnapshot(location, entries.size, entries)
+    }
+
+    private fun entry(relativePath: String, file: File): SaveFileEntry =
+        SaveFileEntry(relativePath, file.length(), file.lastModified())
+
+    /**
+     * Deletes one listed save file. The path is revalidated against the current
+     * snapshot so callers cannot delete arbitrary files inside the save tree.
+     */
+    internal suspend fun deleteSaveFile(game: ScanGame, relativePath: String): Boolean =
+        withManualSaveAccess(game) {
+            if (relativePath.isBlank() || relativePath.startsWith("/") || relativePath.startsWith("\\") ||
+                relativePath.split('/', '\\').any { it == ".." || it == "." }) {
+                throw GameSaveException(SaveErrorCode.SAVE_DIR_UNAVAILABLE)
+            }
+            when (game.engine) {
+                EngineType.SYSTEMNNN -> withManualSystemNnnSaveWrite(game) { store ->
+                    store.access {
+                        val target = store.files()[relativePath]
+                        target != null && Files.deleteIfExists(target.toPath())
+                    }
+                }
+                EngineType.ETHORNELL -> ethornellOperation(game) { store -> store.deleteFile(relativePath) }
+                else -> {
+                    requireCmvsIdle(game.engine)
+                    synchronized(RpgSaveSyncState.INTEROP_LOCK) {
+                        val location = resolveSaveLocation(game)
+                        val directory = checkedSyncDirectory(
+                            location.directory ?: throw GameSaveException(SaveErrorCode.RESOLVE_SAVE_DIR_FAILED),
+                        )
+                        val allowed = listDirectorySaveFiles(game.engine, location).mapNotNull { file ->
+                            runCatching { file.relativeTo(directory).invariantSeparatorsPath }.getOrNull()
+                        }
+                        if (relativePath !in allowed) return@synchronized false
+                        val target = File(directory, relativePath).canonicalFile
+                        if (!target.path.startsWith(directory.path + File.separator) ||
+                            Files.isSymbolicLink(target.toPath()) || !target.isFile) {
+                            return@synchronized false
+                        }
+                        if (!target.delete()) throw GameSaveException(SaveErrorCode.SAVE_DIR_UNAVAILABLE)
+                        pruneEmptySaveDirectories(directory)
+                        true
+                    }
+                }
+            }
+        }
+
+    private fun pruneEmptySaveDirectories(root: File) {
+        root.listFiles().orEmpty().filter { it.isDirectory }.forEach { child ->
+            if (!Files.isSymbolicLink(child.toPath())) {
+                pruneEmptySaveDirectories(child)
+                if (child.listFiles()?.isEmpty() == true) child.delete()
+            }
+        }
     }
 
     /** Manual Ren'Py operations share launch/sync admission and require confirmed external exit. */
