@@ -56,6 +56,9 @@ import com.tyranor.next.core.game.save.RpgSaveFormat
 import com.tyranor.next.core.game.save.RpgSaveSync
 import com.tyranor.next.core.game.save.sync.SaveSyncException
 import com.tyranor.next.core.game.save.sync.SaveSyncRuntime
+import com.tyranor.next.core.game.save.sync.SaveSyncService
+import com.tyranor.next.core.game.save.sync.RuntimeSaveIdentityChange
+import com.tyranor.next.core.game.save.sync.RuntimeSaveIdentityChangeResult
 import com.tyranor.next.core.game.save.sync.requiresExternalSaveExitConfirmation
 import com.tyranor.next.core.game.launch.EngineLauncher
 import com.tyranor.next.core.game.model.ScanGame
@@ -161,8 +164,11 @@ private fun SaveManagementScreen(game: ScanGame) {
             else -> emptyList()
         }
     }
+    val runtimeIdentityConfirmedMessage = stringResource(R.string.save_runtime_identity_confirmed)
+    val runtimeIdentityStaleMessage = stringResource(R.string.save_runtime_identity_stale)
     val clearImportedResourcesDone = stringResource(R.string.save_systemnnn_clear_resources_done)
     val manager = remember { GameSaveManager(context) }
+    val saveSyncService = remember { SaveSyncService(context) }
     var location by remember { mutableStateOf<GameSaveManager.SaveLocation?>(null) }
     var fileCount by remember { mutableStateOf(0) }
     var saveFiles by remember { mutableStateOf<List<GameSaveManager.SaveFileEntry>>(emptyList()) }
@@ -183,9 +189,36 @@ private fun SaveManagementScreen(game: ScanGame) {
     // 导入/导出/删除互斥：并发任务会互相清掉对方的暂存目录，破坏导入的原子性
     var taskRunning by remember { mutableStateOf(false) }
     var versionsRevision by remember { mutableIntStateOf(0) }
+    var externalExitConfirmation by remember(game) {
+        mutableStateOf<SaveSyncRuntime.ExternalExitConfirmation?>(null)
+    }
+    var externalSessionPending by remember(game.uri) { mutableStateOf(false) }
+    var externalSessionSummary by remember(game.uri) { mutableStateOf<SaveSyncRuntime.ExternalExitConfirmationSummary?>(null) }
+    var runtimeIdentityChange by remember(game.uri) { mutableStateOf<RuntimeSaveIdentityChange?>(null) }
+    var showRuntimeIdentityConfirmation by remember(game.uri) { mutableStateOf(false) }
+    val canManageFiles = location?.available == true
 
     // 目录解析与文件递归遍历均为磁盘 IO：统一切到 IO 线程，避免组合期/主线程卡顿
     suspend fun refresh() {
+        try {
+            externalSessionSummary = withContext(Dispatchers.IO) {
+                SaveSyncRuntime.pendingExternalExitConfirmations(context).firstOrNull { it.uri == game.uri }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            externalSessionSummary = null
+        }
+        externalSessionPending = externalSessionSummary != null
+        runtimeIdentityChange = try {
+            if (game.engine == EngineType.RUNTIME_MODULE) {
+                withContext(Dispatchers.IO) { saveSyncService.runtimeSaveIdentityChange(game) }
+            } else null
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
         try {
             val snapshot = withContext(Dispatchers.IO) { manager.inspectSaves(game) }
             location = snapshot.location
@@ -349,6 +382,37 @@ private fun SaveManagementScreen(game: ScanGame) {
                                     }
                                 }
                             }
+                            externalSessionSummary?.let { session ->
+                                Text(
+                                    stringResource(
+                                        R.string.save_external_exit_identity,
+                                        session.modulePackageName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.save_external_exit_identity_unrecorded),
+                                        session.directoryIdentity?.takeIf { it.isNotBlank() } ?: stringResource(R.string.save_external_exit_identity_unrecorded),
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
+                            runtimeIdentityChange?.let { change ->
+                                Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        stringResource(R.string.save_runtime_identity_changed_message),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                    Text(
+                                        stringResource(R.string.save_runtime_identity_old_directory, change.oldDirectory),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        stringResource(R.string.save_runtime_identity_new_directory, change.newDirectory),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
                             // 刷新失败提示：原位展开 / 收回，收起过程中保留最后一条文案
                             val shownRefreshError = rememberLastNonNull(refreshError)
                             ExpandVisibility(visible = refreshError != null, label = "saveRefreshError") {
@@ -371,7 +435,17 @@ private fun SaveManagementScreen(game: ScanGame) {
                         cornerRadius = AppComponentCornerRadius,
                     ) {
                         Column(Modifier.padding(vertical = 4.dp)) {
-                            if (requiresExternalSaveExitConfirmation(game.engine)) {
+                            runtimeIdentityChange?.let { change ->
+                                AppNavItem(
+                                    title = stringResource(R.string.save_runtime_identity_confirm),
+                                    summary = stringResource(R.string.save_runtime_identity_changed_title),
+                                    showLeadingIcon = false,
+                                    showArrow = false,
+                                    drawSurface = false,
+                                    onClick = if (taskRunning) null else ({ showRuntimeIdentityConfirmation = true }),
+                                )
+                            }
+                            if (requiresExternalSaveExitConfirmation(game.engine) || externalSessionPending) {
                                 AppNavItem(
                                     title = stringResource(R.string.save_external_exit_action),
                                     summary = stringResource(R.string.save_external_exit_action_summary),
@@ -386,7 +460,7 @@ private fun SaveManagementScreen(game: ScanGame) {
                                 showLeadingIcon = false,
                                 showArrow = false,
                                 drawSurface = false,
-                                onClick = if (taskRunning) null else ({
+                                onClick = if (taskRunning || !canManageFiles) null else ({
                                     if (rpgWebGame) {
                                         showExportFormatPicker = true
                                     } else {
@@ -401,7 +475,7 @@ private fun SaveManagementScreen(game: ScanGame) {
                                     showLeadingIcon = false,
                                     showArrow = false,
                                     drawSurface = false,
-                                    onClick = if (taskRunning) null else ({
+                                    onClick = if (taskRunning || !canManageFiles) null else ({
                                         runSaveTask {
                                             when (val op = EngineLauncher.syncRpgSaves(context, game)) {
                                                 is EngineLauncher.RpgSaveOpResult.Done -> formatSyncResult(op.value)
@@ -419,7 +493,7 @@ private fun SaveManagementScreen(game: ScanGame) {
                                 showLeadingIcon = false,
                                 showArrow = false,
                                 drawSurface = false,
-                                onClick = if (taskRunning) null else ({
+                                onClick = if (taskRunning || !canManageFiles) null else ({
                                     importLauncher.launch("application/zip")
                                 }),
                             )
@@ -428,7 +502,7 @@ private fun SaveManagementScreen(game: ScanGame) {
                                 showLeadingIcon = false,
                                 showArrow = false,
                                 drawSurface = false,
-                                onClick = if (taskRunning) null else ({ showDeleteConfirm = true }),
+                                onClick = if (taskRunning || !canManageFiles) null else ({ showDeleteConfirm = true }),
                             )
                             ExpandVisibility(visible = hasImportedResources) {
                                 AppNavItem(
@@ -436,7 +510,7 @@ private fun SaveManagementScreen(game: ScanGame) {
                                     showLeadingIcon = false,
                                     showArrow = false,
                                     drawSurface = false,
-                                    onClick = if (taskRunning || !hasImportedResources) null else ({ showClearImportedResources = true }),
+                                    onClick = if (taskRunning || !canManageFiles || !hasImportedResources) null else ({ showClearImportedResources = true }),
                                 )
                             }
                         }
@@ -608,6 +682,50 @@ private fun SaveManagementScreen(game: ScanGame) {
                 }
             }
         }
+    }
+
+    if (showRuntimeIdentityConfirmation) {
+        val change = runtimeIdentityChange
+        AppAlertDialog(
+            onDismissRequest = { showRuntimeIdentityConfirmation = false },
+            dismissEnabled = !taskRunning,
+            title = { Text(stringResource(R.string.save_runtime_identity_changed_title), style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.save_runtime_identity_changed_message), style = MaterialTheme.typography.bodyMedium)
+                    change?.let {
+                        Text(stringResource(R.string.save_runtime_identity_old_directory, it.oldDirectory), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.save_runtime_identity_new_directory, it.newDirectory), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            },
+            confirmButton = {
+                DialogTextButton(
+                    text = stringResource(R.string.save_runtime_identity_confirm),
+                    enabled = !taskRunning && change != null,
+                    onClick = {
+                        showRuntimeIdentityConfirmation = false
+                        val snapshot = change ?: return@DialogTextButton
+                        runSaveTask {
+                            when (val result = saveSyncService.confirmRuntimeSaveIdentityChange(game, snapshot)) {
+                                RuntimeSaveIdentityChangeResult.Confirmed -> runtimeIdentityConfirmedMessage
+                                RuntimeSaveIdentityChangeResult.Stale,
+                                RuntimeSaveIdentityChangeResult.Unavailable -> runtimeIdentityStaleMessage
+                                RuntimeSaveIdentityChangeResult.GameRunning -> saveBusyEngineRunningMessage
+                                is RuntimeSaveIdentityChangeResult.Failed -> result.error.toSaveSyncMessage(context)
+                            }
+                        }
+                    },
+                )
+            },
+            dismissButton = {
+                DialogTextButton(
+                    text = stringResource(R.string.common_cancel),
+                    enabled = !taskRunning,
+                    onClick = { showRuntimeIdentityConfirmation = false },
+                )
+            },
+        )
     }
 
     // MV/MZ 导出格式选择：保留原有的格式确认与说明。

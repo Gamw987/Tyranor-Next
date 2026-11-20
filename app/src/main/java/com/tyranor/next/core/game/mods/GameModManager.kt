@@ -58,7 +58,6 @@ class GameModException(
  */
 object GameModManager {
     private const val ROOT_DIR = "GameMods"
-    private const val ENGINE = "renpy"
     private val SAFE_ID = Regex("^[a-z0-9_-]+$")
 
     internal data class ModFile(
@@ -100,7 +99,7 @@ object GameModManager {
             .asSequence()
             .filter { it.isDirectory }
             .mapNotNull { dir -> runCatching { readManifest(dir) }.getOrNull() }
-            .filter { it.engine == ENGINE && it.files.isNotEmpty() }
+            .filter { it.files.isNotEmpty() }
             .map { manifest ->
                 GameModInfo(
                     id = manifest.id,
@@ -119,7 +118,6 @@ object GameModManager {
         val game = requireGame(gameUri)
         val pluginDir = File(pluginsRoot(), pluginId)
         val manifest = readManifest(pluginDir)
-        if (manifest.engine != ENGINE) throw GameModException(GameModError.UNSUPPORTED_ENGINE)
         if (findState(game, pluginId) != null) throw GameModException(GameModError.ALREADY_ENABLED)
 
         val key = stateKey(game)
@@ -345,7 +343,7 @@ object GameModManager {
             name = json.optString("name", id),
             version = json.optString("version", ""),
             description = json.optString("description", ""),
-            engine = json.optString("engine", ""),
+            engine = json.optString("engine", "").ifBlank { "any" },
             files = files,
             creates = json.optJSONArray("creates").toStringList(),
             cleanup = json.optJSONArray("cleanup").toStringList(),
@@ -354,7 +352,6 @@ object GameModManager {
 
     internal fun validateImportedPlugin(pluginDir: File): ModManifest {
         val manifest = readManifest(pluginDir, requireDirectoryName = false)
-        if (manifest.engine != ENGINE) throw GameModException(GameModError.UNSUPPORTED_ENGINE)
         if (manifest.files.isEmpty()) throw GameModException(GameModError.INVALID_MANIFEST)
         for (file in manifest.files) {
             val src = resolveInside(pluginDir, file.src)
