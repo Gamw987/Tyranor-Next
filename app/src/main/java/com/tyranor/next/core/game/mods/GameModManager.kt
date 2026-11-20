@@ -313,8 +313,8 @@ object GameModManager {
     }
 
     private fun requireGame(gameUri: String): File {
+        // 模组对所有引擎开放：只要求游戏目录可用，不再要求 Ren'Py 的 game/ 子目录。
         val game = gameDirectory(gameUri) ?: throw GameModException(GameModError.INVALID_GAME)
-        if (!File(game, "game").isDirectory) throw GameModException(GameModError.INVALID_GAME)
         return game.canonicalFile
     }
 
