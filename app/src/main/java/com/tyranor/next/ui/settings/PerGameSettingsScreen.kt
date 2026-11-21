@@ -144,6 +144,7 @@ fun PerGameSettingsScreen(game: ScanGame) {
     var krKernel by remember(gid) { mutableStateOf(PerGameSettingsStore.getStr(ctx, gid, PerGameSettingsStore.F_ENGINE_KERNEL)) }
     var krScoped by remember(gid) { mutableStateOf(PerGameSettingsStore.getBool(ctx, gid, PerGameSettingsStore.F_SCOPED_SAVE_DIR)) }
     var krSkipStartupDialogs by remember(gid) { mutableStateOf(PerGameSettingsStore.getBool(ctx, gid, PerGameSettingsStore.F_SKIP_STARTUP_DIALOGS)) }
+    var krExternalOverlay by remember(gid) { mutableStateOf(PerGameSettingsStore.getBool(ctx, gid, PerGameSettingsStore.F_EXTERNAL_OVERLAY)) }
     var krPatchOverlayMode by remember(gid) { mutableStateOf(PerGameSettingsStore.getStr(ctx, gid, PerGameSettingsStore.F_PATCH_OVERLAY_MODE)) }
     var krFont by remember(gid) { mutableStateOf(PerGameSettingsStore.getStr(ctx, gid, PerGameSettingsStore.F_DEFAULT_FONT)) }
     var krForceFont by remember(gid) { mutableStateOf(PerGameSettingsStore.getBool(ctx, gid, PerGameSettingsStore.F_FORCE_DEFAULT_FONT)) }
@@ -440,6 +441,7 @@ fun PerGameSettingsScreen(game: ScanGame) {
     val globalKrKernel = EngineSettingsStore.getKrKernel(ctx)
     val globalKrScoped = EngineSettingsStore.isKrScopedSaveDir(ctx)
     val globalKrSkipStartupDialogs = EngineSettingsStore.isKrSkipStartupDialogs(ctx)
+    val globalKrExternalOverlay = EngineSettingsStore.isKrExternalOverlay(ctx)
     val globalKrPatchOverlayMode = EngineSettingsStore.getKrPatchOverlayMode(ctx)
     val globalKrFont = EngineSettingsStore.getKrDefaultFont(ctx)
     val globalForce = EngineSettingsStore.isKrForceDefaultFont(ctx)
@@ -600,6 +602,7 @@ fun PerGameSettingsScreen(game: ScanGame) {
         PerGameSettingsStore.setStr(ctx, gid, PerGameSettingsStore.F_ENGINE_KERNEL, krKernel)
         PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_SCOPED_SAVE_DIR, krScoped)
         PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_SKIP_STARTUP_DIALOGS, krSkipStartupDialogs)
+        PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_EXTERNAL_OVERLAY, krExternalOverlay)
         PerGameSettingsStore.setStr(ctx, gid, PerGameSettingsStore.F_PATCH_OVERLAY_MODE, krPatchOverlayMode)
         PerGameSettingsStore.setStr(ctx, gid, PerGameSettingsStore.F_DEFAULT_FONT, krFont)
         PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_FORCE_DEFAULT_FONT, krForceFont)
@@ -894,6 +897,11 @@ fun PerGameSettingsScreen(game: ScanGame) {
                                     globalKrSkipStartupDialogs,
                                     krSkipStartupDialogs,
                                 ) { krSkipStartupDialogs = it }
+                                OverrideSwitch(
+                                    stringResource(R.string.engine_settings_external_overlay),
+                                    globalKrExternalOverlay,
+                                    krExternalOverlay,
+                                ) { krExternalOverlay = it }
                                 OverrideChoice(stringResource(R.string.engine_settings_engine_version), krVersionMap, globalKrVersion, krVersion) { krVersion = it }
                                 // SD 卡镜像在运行时强制 KR2 内核（EffectiveEngineSettings.resolveKrKernel），
                                 // 下拉保留存储值展示但置灰，避免用户选择实际不生效的 krkrsdl3；

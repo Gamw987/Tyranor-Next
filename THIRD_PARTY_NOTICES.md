@@ -33,3 +33,13 @@ taken from the original design. The original license text is available at the pr
 The drawing in `MotionLinearProgressIndicator.kt` is adapted from
 `ProgressIndicator.kt` in [Miuix](https://github.com/compose-miuix-ui/miuix) 0.9.2.
 Copyright 2025, compose-miuix-ui contributors. License: Apache License 2.0.
+
+## Dear ImGui（MIT）
+
+`engine/src/main/cpp/imgui_overlay/imgui/` 为 Dear ImGui 1.88 WIP 的源码副本，仅用于外部悬浮窗渲染。
+
+- Project: [Dear ImGui](https://github.com/ocornut/imgui)
+- License: MIT
+- Copyright (c) 2014-2024 Omar Cornut
+
+MIT 许可要求保留版权与许可声明；完整文本见 `engine/src/main/cpp/imgui_overlay/imgui/LICENSE.txt`。

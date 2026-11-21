@@ -875,6 +875,7 @@ internal fun EngineSettingsDetailScreen(kind: EngineSettingsKind) {
     var krKernel by remember { mutableStateOf(EngineSettingsStore.getKrKernel(ctx)) }
     var krScoped by remember { mutableStateOf(EngineSettingsStore.isKrScopedSaveDir(ctx)) }
     var krSkipStartupDialogs by remember { mutableStateOf(EngineSettingsStore.isKrSkipStartupDialogs(ctx)) }
+    var krExternalOverlay by remember { mutableStateOf(EngineSettingsStore.isKrExternalOverlay(ctx)) }
     var krPatchOverlayMode by remember { mutableStateOf(EngineSettingsStore.getKrPatchOverlayMode(ctx)) }
     var krFont by remember { mutableStateOf(EngineSettingsStore.getKrDefaultFont(ctx)) }
     var krForceFont by remember { mutableStateOf(EngineSettingsStore.isKrForceDefaultFont(ctx)) }
@@ -1004,6 +1005,7 @@ internal fun EngineSettingsDetailScreen(kind: EngineSettingsKind) {
                 EngineSettingsStore.setKrKernel(ctx, krKernel)
                 EngineSettingsStore.setKrScopedSaveDir(ctx, krScoped)
                 EngineSettingsStore.setKrSkipStartupDialogs(ctx, krSkipStartupDialogs)
+                EngineSettingsStore.setKrExternalOverlay(ctx, krExternalOverlay)
                 EngineSettingsStore.setKrPatchOverlayMode(ctx, krPatchOverlayMode)
                 EngineSettingsStore.setKrDefaultFont(ctx, krFont)
                 EngineSettingsStore.setKrForceDefaultFont(ctx, krForceFont)
@@ -1106,7 +1108,7 @@ internal fun EngineSettingsDetailScreen(kind: EngineSettingsKind) {
         ) { innerPadding ->
             LazyListPlaceholder(
                 kind,
-                krVersion, krKernel, krScoped, krSkipStartupDialogs, krFont, krForceFont, krRenderer, krDrawThread,
+                krVersion, krKernel, krScoped, krSkipStartupDialogs, krExternalOverlay, krFont, krForceFont, krRenderer, krDrawThread,
                 krSwCompress, krOglCompress, krMem, krTexsize, krAccurate, krFps, isSdl3, krIs134,
                 krVCursorScale, krMenuOpa, krPatchOverlayMode,
                 ons, artKernel, artVersion, artPatch, artResolution, artSideCut, artSurfaceCache,
@@ -1129,6 +1131,7 @@ internal fun EngineSettingsDetailScreen(kind: EngineSettingsKind) {
                 onKrKernel = { krKernel = it },
                 onKrScoped = { krScoped = it },
                 onKrSkipStartupDialogs = { krSkipStartupDialogs = it },
+                onKrExternalOverlay = { krExternalOverlay = it },
                 onKrPatchOverlayMode = { krPatchOverlayMode = it },
                 onKrForceFont = { krForceFont = it },
                 onKrRenderer = { krRenderer = it },
@@ -1208,6 +1211,7 @@ private typealias FontPickerLauncher = androidx.activity.compose.ManagedActivity
 private fun LazyListPlaceholder(
     kind: EngineSettingsKind,
     krVersion: String, krKernel: String, krScoped: Boolean, krSkipStartupDialogs: Boolean,
+    krExternalOverlay: Boolean,
     krFont: String, krForceFont: Boolean,
     krRenderer: String, krDrawThread: String, krSwCompress: String, krOglCompress: String,
     krMem: String, krTexsize: String, krAccurate: String, krFps: String, isSdl3: Boolean, krIs134: Boolean,
@@ -1233,6 +1237,7 @@ private fun LazyListPlaceholder(
     graphicsContent: @Composable () -> Unit,
     onKrVersion: (String) -> Unit, onKrKernel: (String) -> Unit, onKrScoped: (Boolean) -> Unit,
     onKrSkipStartupDialogs: (Boolean) -> Unit,
+    onKrExternalOverlay: (Boolean) -> Unit,
     onKrPatchOverlayMode: (String) -> Unit,
     onKrForceFont: (Boolean) -> Unit, onKrRenderer: (String) -> Unit, onKrDrawThread: (String) -> Unit,
     onKrSwCompress: (String) -> Unit, onKrOglCompress: (String) -> Unit, onKrMem: (String) -> Unit,
@@ -1319,6 +1324,12 @@ private fun LazyListPlaceholder(
                     summary = stringResource(R.string.engine_settings_skip_startup_dialogs_summary),
                     checked = krSkipStartupDialogs,
                     onCheckedChange = onKrSkipStartupDialogs,
+                )
+                SwitchPreference(
+                    title = stringResource(R.string.engine_settings_external_overlay),
+                    summary = stringResource(R.string.engine_settings_external_overlay_summary),
+                    checked = krExternalOverlay,
+                    onCheckedChange = onKrExternalOverlay,
                 )
                 DropdownRow(stringResource(R.string.engine_settings_engine_version), krSelectMap, krVersion, onKrVersion)
                 DropdownRow(stringResource(R.string.engine_settings_engine_kernel), krKernelMap, krKernel, onKrKernel)

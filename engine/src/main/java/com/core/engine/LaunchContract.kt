@@ -205,6 +205,16 @@ object LaunchContract {
     /** 游戏标题（加载层/窗口标题兜底用）。 */
     const val GAMES_TITLE = "games_title"
 
+    // ---------- 外部悬浮窗 ----------
+
+    /**
+     * 是否在引擎宿主上挂载 ImGui 外部悬浮窗。
+     *
+     * <p>宿主只负责显示；浮层不注入引擎 GL 上下文，也不接管游戏输入。
+     * 目前仅 KR2（kirikiri2）宿主实现。
+     */
+    const val EXTERNAL_OVERLAY_ENABLED = "externalOverlayEnabled"
+
     // ---------- launchMode 固定取值 ----------
 
     const val LAUNCH_MODE_KRKRSDL3 = "internal.krkrsdl3"

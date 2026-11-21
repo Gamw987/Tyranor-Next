@@ -42,6 +42,8 @@ object PerGameSettingsStore {
     const val F_FORCE_DEFAULT_FONT = "force_default_font"
     const val F_PATCH_OVERLAY_MODE = "patch_overlay_mode"
     const val F_SKIP_STARTUP_DIALOGS = "skip_startup_dialogs"
+    /** 单游戏外部悬浮窗覆盖（null=跟随全局）。 */
+    const val F_EXTERNAL_OVERLAY = "external_overlay"
     const val F_RENDERER = "renderer"
     const val F_SOFTWARE_DRAW_THREAD = "software_draw_thread"
     const val F_SOFTWARE_COMPRESS_TEX = "software_compress_tex"

@@ -568,6 +568,8 @@
     <string name="engine_settings_scoped_save_dir">Isolated save directory</string>
     <string name="engine_settings_skip_startup_dialogs">Block game launch pop-ups</string>
     <string name="engine_settings_skip_startup_dialogs_summary">Block repeated pop-ups before each game launch and enter the game directly</string>
+    <string name="engine_settings_external_overlay">External overlay</string>
+    <string name="engine_settings_external_overlay_summary">Show an ImGui overlay above the game (step 1: display only, input is not captured)</string>
     <string name="engine_settings_engine_version">Engine version</string>
     <string name="engine_settings_engine_kernel">Engine kernel</string>
     <string name="engine_settings_krkr_patch_overlay">KRKR virtual patch.tjs patch</string>

@@ -1919,6 +1919,8 @@ object EngineLauncher {
             putExtra(LaunchContract.LAUNCH_TARGET, game.launchTarget)
             putExtra(LaunchContract.LAUNCH_MODE, LaunchContract.LAUNCH_MODE_KIRIKIROID2)
             putExtra(KrkrStartupDialogPolicy.EXTRA_ENABLED, skipStartupDialogs)
+            // 外部悬浮窗目前只在 KR2 宿主实现；krkrsdl3 分支不下发。
+            putExtra(LaunchContract.EXTERNAL_OVERLAY_ENABLED, settings.krExternalOverlay)
             putExtra(LaunchContract.SAF_FILE_FALLBACK, needsSafFallback)
             patchOverlay?.let {
                 putExtra(LaunchContract.KR_PATCH_OVERLAY_TARGET, it.targetPatch.absolutePath)

@@ -105,6 +105,10 @@ object EngineSettingsResolver {
                 bool(PerGameSettingsStore.F_SKIP_STARTUP_DIALOGS),
                 EngineSettingsStore.isKrSkipStartupDialogs(app),
             ),
+            krExternalOverlay = EffectiveEngineSettings.resolveBool(
+                bool(PerGameSettingsStore.F_EXTERNAL_OVERLAY),
+                EngineSettingsStore.isKrExternalOverlay(app),
+            ),
             krRenderer = EffectiveEngineSettings.resolve(
                 str(PerGameSettingsStore.F_RENDERER),
                 EngineSettingsStore.getKrRenderer(app),
@@ -359,6 +363,8 @@ data class ResolvedEngineSettings(
     val krForceDefaultFont: Boolean,
     val krPatchOverlayMode: String,
     val krSkipStartupDialogs: Boolean,
+    /** 是否在 KR2 宿主上挂载 ImGui 外部悬浮窗（仅显示，不接管输入）。 */
+    val krExternalOverlay: Boolean,
     val krRenderer: String,
     val artVersion: String,
     /** Artemis 内核生效值（官方多 revision / 自研 clean-room）。 */

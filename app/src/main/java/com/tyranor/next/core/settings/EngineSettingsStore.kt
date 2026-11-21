@@ -35,6 +35,7 @@ object EngineSettingsStore {
     const val KEY_KR_SCOPED_SAVE_DIR = "kr_scoped_save_dir"
     const val KEY_KR_PATCH_OVERLAY_MODE = "kr_patch_overlay_mode"
     const val KEY_KR_SKIP_STARTUP_DIALOGS = "kr_skip_startup_dialogs"
+    const val KEY_KR_EXTERNAL_OVERLAY = "kr_external_overlay"
     const val KEY_KR_ANIME4K_MODE = "kr_anime4k_mode"
 
     // Artemis 应用级默认
@@ -552,6 +553,13 @@ object EngineSettingsStore {
 
     fun setKrSkipStartupDialogs(c: Context, enabled: Boolean) =
         prefs(c).edit().putBoolean(KEY_KR_SKIP_STARTUP_DIALOGS, enabled).apply()
+
+    /** 是否在 KR2 宿主上挂载 ImGui 外部悬浮窗（仅显示，不接管输入）。 */
+    fun isKrExternalOverlay(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_KR_EXTERNAL_OVERLAY, false)
+
+    fun setKrExternalOverlay(c: Context, enabled: Boolean) =
+        prefs(c).edit().putBoolean(KEY_KR_EXTERNAL_OVERLAY, enabled).apply()
 
     fun getKrDefaultFont(c: Context): String = prefs(c).getString(KEY_KR_DEFAULT_FONT, "").orEmpty()
     fun setKrDefaultFont(c: Context, p: String) = prefs(c).edit().putString(KEY_KR_DEFAULT_FONT, p.trim()).apply()
