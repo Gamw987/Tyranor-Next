@@ -166,6 +166,19 @@ internal class EthornellSaveStore(
         }
     }
 
+    /** Delete one listed user file, then prune empty user directories only. */
+    fun deleteFile(relative: String): Boolean {
+        prepare()
+        if (relative.isBlank() || relative.startsWith("/") || relative.split('/', '\\').any { it == ".." || it == "." }) {
+            unavailable()
+        }
+        val target = userFiles(root).firstOrNull { relativeName(it) == relative }
+            ?: return false
+        if (!target.delete()) unavailable()
+        pruneEmptyUserDirectories(root)
+        return true
+    }
+
     /** Also used for app-data cleanup: root and every reserved inode remain. */
     fun delete(): Int {
         prepare()

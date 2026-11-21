@@ -34,3 +34,18 @@ add_library(graphics_timer SHARED graphics_timer.cpp)
 target_link_libraries(graphics_timer ${egl-lib} ${gles-lib})
 
 target_compile_features(artemis_loader PRIVATE cxx_std_17)
+
+# 外部悬浮窗：宿主 Activity 里的 TextureView 提供 Surface，本库自建 EGL/GLES3
+# 上下文并用 ImGui 绘制。不注入引擎自身的 GL 上下文，也不接管游戏输入。
+add_library(imgui_overlay SHARED
+        imgui_overlay/overlay_jni.cpp
+        imgui_overlay/overlay_ui.cpp
+        imgui_overlay/imgui/imgui.cpp
+        imgui_overlay/imgui/imgui_draw.cpp
+        imgui_overlay/imgui/imgui_tables.cpp
+        imgui_overlay/imgui/imgui_widgets.cpp
+        imgui_overlay/imgui/imgui_impl_opengl3.cpp)
+target_include_directories(imgui_overlay PRIVATE imgui_overlay/imgui)
+target_compile_definitions(imgui_overlay PRIVATE IMGUI_IMPL_OPENGL_ES3)
+target_compile_features(imgui_overlay PRIVATE cxx_std_17)
+target_link_libraries(imgui_overlay ${log-lib} ${android-lib} ${egl-lib} ${gles3-lib})
