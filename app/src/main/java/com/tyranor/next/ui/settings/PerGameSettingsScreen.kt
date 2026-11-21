@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.core.overlay.ExternalOverlayManager
 import com.tyranor.next.R
 import androidx.compose.ui.graphics.Color as ComposeColor
 import com.tyranor.next.core.engine.EngineType
@@ -602,7 +603,19 @@ fun PerGameSettingsScreen(game: ScanGame) {
         PerGameSettingsStore.setStr(ctx, gid, PerGameSettingsStore.F_ENGINE_KERNEL, krKernel)
         PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_SCOPED_SAVE_DIR, krScoped)
         PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_SKIP_STARTUP_DIALOGS, krSkipStartupDialogs)
-        PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_EXTERNAL_OVERLAY, krExternalOverlay)
+        val enabled = krExternalOverlay ?: false
+        PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_EXTERNAL_OVERLAY, enabled)
+        val manager = ExternalOverlayManager.init(ctx)
+        if (enabled && !manager.isOverlayPermissionGranted()) {
+            AppNotice.makeText(
+                ctx,
+                ctx.getString(R.string.engine_settings_overlay_permission_needed),
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            krExternalOverlay = false
+        } else {
+            manager.toggle(enabled)
+        }
         PerGameSettingsStore.setStr(ctx, gid, PerGameSettingsStore.F_PATCH_OVERLAY_MODE, krPatchOverlayMode)
         PerGameSettingsStore.setStr(ctx, gid, PerGameSettingsStore.F_DEFAULT_FONT, krFont)
         PerGameSettingsStore.setBool(ctx, gid, PerGameSettingsStore.F_FORCE_DEFAULT_FONT, krForceFont)
@@ -897,11 +910,26 @@ fun PerGameSettingsScreen(game: ScanGame) {
                                     globalKrSkipStartupDialogs,
                                     krSkipStartupDialogs,
                                 ) { krSkipStartupDialogs = it }
+                                val eff = krExternalOverlay ?: false
                                 OverrideSwitch(
                                     stringResource(R.string.engine_settings_external_overlay),
-                                    globalKrExternalOverlay,
+                                    globalKrExternalOverlay ?: false,
                                     krExternalOverlay,
-                                ) { krExternalOverlay = it }
+                                ) { enabled ->
+                                    val en = enabled ?: false
+                                    val manager = ExternalOverlayManager.init(ctx)
+                                    if (en && !manager.isOverlayPermissionGranted()) {
+                                        AppNotice.makeText(
+                                            ctx,
+                                            ctx.getString(R.string.engine_settings_overlay_permission_needed),
+                                            android.widget.Toast.LENGTH_LONG,
+                                        ).show()
+                                        krExternalOverlay = false
+                                    } else {
+                                        krExternalOverlay = en
+                                        manager.toggle(en)
+                                    }
+                                }
                                 OverrideChoice(stringResource(R.string.engine_settings_engine_version), krVersionMap, globalKrVersion, krVersion) { krVersion = it }
                                 // SD 卡镜像在运行时强制 KR2 内核（EffectiveEngineSettings.resolveKrKernel），
                                 // 下拉保留存储值展示但置灰，避免用户选择实际不生效的 krkrsdl3；

@@ -9,6 +9,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
 import bridge.PrimaryStorageRoot
+import com.core.overlay.ExternalOverlayManager
 import com.tyranor.next.core.game.save.GameSaveManager
 import com.tyranor.next.core.game.storage.GameLibraryRepository
 import com.tyranor.next.core.process.AppProcess
@@ -65,6 +66,9 @@ class TyranorNextApplication : Application(), DefaultLifecycleObserver, Configur
             AppSettingsStore.initDefaultThemeParticles(this)
             // 启动器图标别名与设置对齐（升级、清除数据或上次切换失败时兜底）；幂等，无变化不写。
             AppIconSwitcher.apply(this, AppSettingsStore.isClassicIconEnabled(this))
+            // 系统悬浮窗管理器（用于在第三方 App 窗口之上显示 ImGui 外部浮层）；
+            // 仅主进程需要，实际挂载由设置页开关触发，不自动申请系统权限。
+            ExternalOverlayManager.init(this)
         }
         // 共享 prefs 文件更名（yukihub_prefs → tyranor_prefs）：所有进程（含引擎子进程）
         // 启动最早时机一次性迁移，必须先于任何 EngineSettingsStore/引擎偏好读取。

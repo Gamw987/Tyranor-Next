@@ -570,6 +570,7 @@
     <string name="engine_settings_skip_startup_dialogs_summary">屏蔽每次进入游戏前的重复弹窗，直接进入游戏</string>
     <string name="engine_settings_external_overlay">外部悬浮窗</string>
     <string name="engine_settings_external_overlay_summary">在游戏画面上显示 ImGui 浮层（第 1 步仅显示，不接管输入）</string>
+    <string name="engine_settings_overlay_permission_needed">需在系统设置中为 Tyranor Next 开启“显示过其他应用”权限，悬浮窗才能显示。</string>
     <string name="engine_settings_engine_version">引擎版本</string>
     <string name="engine_settings_engine_kernel">引擎内核</string>
     <string name="engine_settings_krkr_patch_overlay">KRKR 虚拟 patch.tjs 补丁</string>

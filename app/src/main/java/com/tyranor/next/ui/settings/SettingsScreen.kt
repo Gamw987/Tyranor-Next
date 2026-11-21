@@ -71,6 +71,7 @@ import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.core.overlay.ExternalOverlayManager
 import com.tyranor.next.R
 import com.tyranor.next.core.game.launch.EngineLauncher
 import com.tyranor.next.core.settings.AppSettingsStore
@@ -1131,7 +1132,20 @@ internal fun EngineSettingsDetailScreen(kind: EngineSettingsKind) {
                 onKrKernel = { krKernel = it },
                 onKrScoped = { krScoped = it },
                 onKrSkipStartupDialogs = { krSkipStartupDialogs = it },
-                onKrExternalOverlay = { krExternalOverlay = it },
+                onKrExternalOverlay = { enabled ->
+                    val manager = ExternalOverlayManager.init(ctx)
+                    if (enabled && !manager.isOverlayPermissionGranted()) {
+                        AppNotice.makeText(
+                            ctx,
+                            ctx.getString(R.string.engine_settings_overlay_permission_needed),
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                        krExternalOverlay = false
+                    } else {
+                        krExternalOverlay = enabled
+                        manager.toggle(enabled)
+                    }
+                },
                 onKrPatchOverlayMode = { krPatchOverlayMode = it },
                 onKrForceFont = { krForceFont = it },
                 onKrRenderer = { krRenderer = it },

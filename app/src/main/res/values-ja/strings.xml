@@ -570,6 +570,7 @@
     <string name="engine_settings_skip_startup_dialogs_summary">ゲームを起動するたびに表示される重複ポップアップを非表示にして、すぐにゲームを開始します</string>
     <string name="engine_settings_external_overlay">外部オーバーレイ</string>
     <string name="engine_settings_external_overlay_summary">ゲーム画面に ImGui オーバーレイを表示します（第 1 段階は表示のみ、入力は奪いません）</string>
+    <string name="engine_settings_overlay_permission_needed">システム設定で Tyranor Next の「他のアプリに重ねて表示」権限を有効にしてください。</string>
     <string name="engine_settings_engine_version">エンジンバージョン</string>
     <string name="engine_settings_engine_kernel">エンジンカーネル</string>
     <string name="engine_settings_krkr_patch_overlay">KRKR 仮想 patch.tjs パッチ</string>

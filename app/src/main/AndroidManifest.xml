@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- 尽力结束后台的外部模拟器；不能替代系统“强行停止”。 -->
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <!-- 系统悬浮窗：用于在第三方游戏/JoiPlay 窗口之上显示 ImGui 外部浮层；
+         必须由用户在系统设置中手动开启“显示过其他应用”，App 不能自动授予。 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <queries>
         <package android:name="cyou.joiplay.runtime.rpgmaker" />

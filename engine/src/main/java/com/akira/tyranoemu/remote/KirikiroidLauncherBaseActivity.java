@@ -10,11 +10,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Xml;
-import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import com.core.engine.EngineStartupOverlay;
@@ -77,7 +75,6 @@ public abstract class KirikiroidLauncherBaseActivity extends KR2Activity {
     private String pendingGamePath;
     private boolean pendingMaps;
     private com.core.gl.ArtemisPerformanceOverlay graphicsOverlay;
-    private com.core.overlay.ImGuiOverlayView externalOverlay;
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -116,7 +113,6 @@ public abstract class KirikiroidLauncherBaseActivity extends KR2Activity {
         configureLandscapeLoadingWindow(Color.BLACK);
         mask = new EngineStartupOverlay(this);
         mask.attachTo(mFrameLayout);
-        attachExternalOverlayIfEnabled();
         NativeBridge.setKrkrGameReadyListener(this::revealGame);
         String path = getIntent().getStringExtra(LaunchContract.PATH);
         if (path != null && path.length() != 0) {
@@ -124,26 +120,6 @@ public abstract class KirikiroidLauncherBaseActivity extends KR2Activity {
         } else {
             finish();
         }
-    }
-
-    /**
-     * 外部悬浮窗（ImGui/GLES）：宿主内 TextureView + 独立 EGL 上下文，不注入引擎 GL，
-     * 也不接管输入。第 1 步仅显示，开关来自启动 Intent。
-     */
-    private void attachExternalOverlayIfEnabled() {
-        if (!getIntent().getBooleanExtra(LaunchContract.EXTERNAL_OVERLAY_ENABLED, false)) return;
-        if (mFrameLayout == null || externalOverlay != null) return;
-        float density = getResources().getDisplayMetrics().density;
-        int width = Math.round(360f * density);
-        int height = Math.round(240f * density);
-        int margin = Math.round(16f * density);
-        com.core.overlay.ImGuiOverlayView view = new com.core.overlay.ImGuiOverlayView(this);
-        FrameLayout.LayoutParams params =
-                new FrameLayout.LayoutParams(width, height, Gravity.TOP | Gravity.END);
-        params.setMargins(margin, margin, margin, margin);
-        mFrameLayout.addView(view, params);
-        externalOverlay = view;
-        Log.i(TAG, "external overlay attached " + width + "x" + height);
     }
 
     /**
@@ -817,7 +793,6 @@ public abstract class KirikiroidLauncherBaseActivity extends KR2Activity {
     public void onDestroy() {
         try {
             destroyed = true;
-            if (externalOverlay != null) externalOverlay.stopRender();
             if (graphicsOverlay != null) graphicsOverlay.hide();
             if (mask != null) mask.dispose();
             mask = null;
